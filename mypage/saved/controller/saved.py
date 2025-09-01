@@ -1,3 +1,3 @@
 from fastapi import APIRouter
 
-router = APIRouter(prefix="/mypage")
+router = APIRouter(prefix="/api/mypage")
