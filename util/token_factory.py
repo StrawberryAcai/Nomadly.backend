@@ -5,11 +5,21 @@ from util.jwt_util import RefreshToken, AccessToken, JWT_SECRET, JWT_ALGORITHM
 
 
 class TokenFactory:
+    _instance = None
+    _initialized = False
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
     def __init__(self):
-        self.token_types = {
-            "access": AccessToken,
-            "refresh": RefreshToken
-        }
+        if not self._initialized:
+            self.token_types = {
+                "access": AccessToken,
+                "refresh": RefreshToken
+            }
+            self._initialized = True
 
     def create_token(self, token_type: str, user_id: uuid.UUID) -> str:
         if token_type not in self.token_types:
