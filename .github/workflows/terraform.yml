@@ -54,6 +54,7 @@ jobs:
         run: |
           terraform plan -input=false -out=tfplan \
             -var="github_owner=${{ github.repository_owner }}" \
+            -var="github_repo=${{ github.event.repository.name }}" \
             -var="database_url=${{ secrets.DATABASE_URL }}" \
             -var="jwt_secret=${{ secrets.JWT_SECRET }}"
 
