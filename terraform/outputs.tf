@@ -10,7 +10,7 @@ output "artifact_registry_repository_url" {
 
 output "github_actions_service_account" {
   description = "GitHub Actions service account email"
-  value       = google_service_account.github_actions.email
+  value       = data.google_service_account.github_actions.email
 }
 
 output "workload_identity_provider" {

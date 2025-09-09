@@ -181,27 +181,39 @@ resource "google_secret_manager_secret" "jwt_secret" {
 }
 
 # -----------------------------------------------------------
-# Workload Identity Pool & Provider (이미 수동 생성됨 → data로 참조)
+# Workload Identity Pool & Provider for GitHub Actions
 # -----------------------------------------------------------
 
-data "google_iam_workload_identity_pool" "github_pool" {
-  project  = var.project_id
-  location = "global"
-  name     = "github-pool"
+resource "google_iam_workload_identity_pool" "github_pool" {
+  project                   = var.project_id
+  workload_identity_pool_id = "github-pool"
+  display_name              = "GitHub Actions Pool"
+  description               = "Identity pool for GitHub Actions"
 }
 
-data "google_iam_workload_identity_pool_provider" "github_provider" {
-  project                   = var.project_id
-  location                  = "global"
-  workload_identity_pool_id = data.google_iam_workload_identity_pool.github_pool.workload_identity_pool_id
-  name                      = "github-provider"
+resource "google_iam_workload_identity_pool_provider" "github_provider" {
+  project                            = var.project_id
+  workload_identity_pool_id          = google_iam_workload_identity_pool.github_pool.workload_identity_pool_id
+  workload_identity_pool_provider_id = "github-provider"
+  display_name                       = "GitHub Provider"
+  description                        = "OIDC identity pool provider for GitHub Actions"
+
+  attribute_mapping = {
+    "google.subject"       = "assertion.sub"
+    "attribute.actor"      = "assertion.actor"
+    "attribute.repository" = "assertion.repository"
+  }
+
+  oidc {
+    issuer_uri = "https://token.actions.githubusercontent.com"
+  }
 }
 
 # Allow GitHub Actions to impersonate the service account
 resource "google_service_account_iam_member" "github_actions_workload_identity" {
   service_account_id = data.google_service_account.github_actions.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = "principalSet://iam.googleapis.com/${data.google_iam_workload_identity_pool.github_pool.name}/attribute.repository/${var.github_owner}/${var.github_repo}"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_pool.name}/attribute.repository/${var.github_owner}/${var.github_repo}"
 }
 
 # -----------------------------------------------------------
