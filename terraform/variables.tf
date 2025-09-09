@@ -4,16 +4,6 @@ variable "project_id" {
   default     = "paradox-intern"
 }
 
-# providers.tf
-provider "google" {
-  project = var.project_id
-  region  = var.region
-}
-
-# main.tf (data 소스)
-data "google_project" "current" {
-  project_id = var.project_id   # ← 명시!
-}
 
 variable "region" {
   description = "GCP region for resources"
