@@ -9,6 +9,7 @@ on:
 env:
   TF_VERSION: 1.5.0
   PROJECT_ID: paradox-intern
+  PROJECT_NUMBER: "855262384811"
   REGION: asia-northeast3
 
 jobs:
@@ -37,7 +38,7 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          workload_identity_provider: projects/${{ env.PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider
           service_account: github-actions@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
 
       - name: Terraform Init
