@@ -53,6 +53,9 @@ jobs:
       - name: Terraform Plan
         run: |
           terraform plan -input=false -out=tfplan \
+            -var="project_id=${{ env.PROJECT_ID }}" \
+            -var="region=${{ env.REGION }}" \
+            -var="github_repo=${{ github.event.repository.name }}" \
             -var="github_owner=${{ github.repository_owner }}" \
             -var="github_repo=${{ github.event.repository.name }}" \
             -var="database_url=${{ secrets.DATABASE_URL }}" \
