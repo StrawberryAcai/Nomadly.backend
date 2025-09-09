@@ -1,13 +1,21 @@
 import psycopg2
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def get_connection():
-    con = psycopg2.connect(
-        host='localhost',
-        dbname='nomadly',
-        user='postgres',
-        password='postgres',
-        port=5432
-    )
+    database_url = os.getenv('DATABASE_URL')
+    if database_url:
+        con = psycopg2.connect(database_url)
+    else:
+        con = psycopg2.connect(
+            host=os.getenv('DB_HOST', 'localhost'),
+            dbname=os.getenv('DB_NAME', 'nomadly'),
+            user=os.getenv('DB_USER', 'postgres'),
+            password=os.getenv('DB_PASSWORD', 'postgres'),
+            port=int(os.getenv('DB_PORT', '5432'))
+        )
     cur = con.cursor()
     return con, cur
 
