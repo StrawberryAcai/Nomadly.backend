@@ -2,18 +2,18 @@
 # These will be populated manually or via terraform apply with -var flags
 
 resource "google_secret_manager_secret_version" "database_url" {
-  secret = google_secret_manager_secret.database_url.id
+  secret      = google_secret_manager_secret.database_url.id
   secret_data = var.database_url
-  
+
   lifecycle {
     ignore_changes = [secret_data]
   }
 }
 
 resource "google_secret_manager_secret_version" "jwt_secret" {
-  secret = google_secret_manager_secret.jwt_secret.id
+  secret      = google_secret_manager_secret.jwt_secret.id
   secret_data = var.jwt_secret
-  
+
   lifecycle {
     ignore_changes = [secret_data]
   }

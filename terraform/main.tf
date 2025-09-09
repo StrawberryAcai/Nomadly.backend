@@ -32,7 +32,7 @@ resource "google_artifact_registry_repository" "nomadly" {
   format        = "DOCKER"
   location      = var.region
   description   = "Docker repository for Nomadly API"
-  
+
   depends_on = [google_project_service.artifactregistry]
 }
 
@@ -72,20 +72,20 @@ resource "google_project_iam_member" "github_actions_artifact_registry_writer" {
 resource "google_cloud_run_v2_service" "production" {
   name     = var.service_name
   location = var.region
-  
+
   template {
     containers {
       image = "${var.region}-docker.pkg.dev/${var.project_id}/${var.artifact_registry_repository}/nomadly-api:latest"
-      
+
       ports {
         container_port = 8000
       }
-      
+
       env {
         name  = "JWT_ALGORITHM"
         value = "HS256"
       }
-      
+
       env {
         name = "DATABASE_URL"
         value_source {
@@ -95,7 +95,7 @@ resource "google_cloud_run_v2_service" "production" {
           }
         }
       }
-      
+
       env {
         name = "JWT_SECRET"
         value_source {
@@ -105,7 +105,7 @@ resource "google_cloud_run_v2_service" "production" {
           }
         }
       }
-      
+
       resources {
         limits = {
           cpu    = "1"
@@ -113,20 +113,20 @@ resource "google_cloud_run_v2_service" "production" {
         }
       }
     }
-    
+
     scaling {
       min_instance_count = 0
       max_instance_count = 5
     }
-    
+
     timeout = "300s"
   }
-  
+
   traffic {
     percent = 100
     type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
   }
-  
+
   depends_on = [
     google_project_service.run,
     google_artifact_registry_repository.nomadly
@@ -144,7 +144,7 @@ resource "google_cloud_run_service_iam_member" "production_invoker" {
 # Secret Manager for sensitive environment variables
 resource "google_secret_manager_secret" "database_url" {
   secret_id = "database-url"
-  
+
   replication {
     auto {}
   }
@@ -152,7 +152,7 @@ resource "google_secret_manager_secret" "database_url" {
 
 resource "google_secret_manager_secret" "jwt_secret" {
   secret_id = "jwt-secret"
-  
+
   replication {
     auto {}
   }
@@ -170,13 +170,13 @@ resource "google_iam_workload_identity_pool_provider" "github_provider" {
   workload_identity_pool_id          = google_iam_workload_identity_pool.github_pool.workload_identity_pool_id
   workload_identity_pool_provider_id = "github-provider"
   display_name                       = "GitHub Actions Provider"
-  
+
   attribute_mapping = {
     "google.subject"       = "assertion.sub"
     "attribute.actor"      = "assertion.actor"
     "attribute.repository" = "assertion.repository"
   }
-  
+
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
   }
