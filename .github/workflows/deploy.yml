@@ -63,6 +63,16 @@ jobs:
         cd terraform
         chmod +x import-existing-resources.sh
 
+    - name: 'Create terraform.tfvars'
+      run: |
+        cd terraform
+        cat > terraform.tfvars << EOF
+        github_owner = "StrawberryAcai"
+        github_repo = "Nomadly.backend"
+        database_url = "${{ secrets.DATABASE_URL }}"
+        jwt_secret = "${{ secrets.JWT_SECRET }}"
+        EOF
+
     - name: 'Import existing resources'
       run: |
         cd terraform
@@ -71,13 +81,13 @@ jobs:
     - name: 'Terraform Plan'
       run: |
         cd terraform
-        terraform plan -var="github_owner=StrawberryAcai" -var="github_repo=Nomadly.backend" -var="database_url=${{ secrets.DATABASE_URL }}" -var="jwt_secret=${{ secrets.JWT_SECRET }}"
+        terraform plan
 
     - name: 'Terraform Apply'
       if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
       run: |
         cd terraform
-        terraform apply -auto-approve -var="github_owner=StrawberryAcai" -var="github_repo=Nomadly.backend" -var="database_url=${{ secrets.DATABASE_URL }}" -var="jwt_secret=${{ secrets.JWT_SECRET }}"
+        terraform apply -auto-approve
 
     - name: 'Update Cloud Run service with new image'
       if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
