@@ -15,6 +15,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: production  # Environment secrets를 사용하기 위해 추가
     
     permissions:
       contents: read
