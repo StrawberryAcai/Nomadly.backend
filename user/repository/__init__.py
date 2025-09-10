@@ -55,7 +55,18 @@ CREATE TABLE IF NOT EXISTS interest (
 """
 
 def create_all_tables():
-    create_table_if_not_exists("user", user_table_sql)
-    create_table_if_not_exists("interest", interest_table_sql)
+    try:
+        create_table_if_not_exists("user", user_table_sql)
+        create_table_if_not_exists("interest", interest_table_sql)
+        print("✅ Database tables initialized successfully")
+    except Exception as e:
+        print(f"⚠️ Database initialization failed: {e}")
+        # Don't crash the app, just log the error
 
-create_all_tables()
+# Only initialize tables if we're not in import-only mode
+if __name__ != '__main__':
+    try:
+        create_all_tables()
+    except Exception as e:
+        print(f"⚠️ Database connection failed during startup: {e}")
+        print("📝 App will continue without database initialization")

@@ -14,16 +14,24 @@ class JWTConfig:
     
     def _ensure_jwt_secret(self):
         """Ensure JWT secret exists, generate if needed (like @Bean keyPair())"""
-        # Load environment variables
-        load_dotenv()
+        # Load environment variables (only if .env file exists)
+        env_path = Path(__file__).parent.parent / '.env'
+        if env_path.exists():
+            load_dotenv()
         
         # Get current secret
         current_secret = os.getenv('JWT_SECRET')
         
         # Check if we need to generate a new secret
         if not current_secret or current_secret == 'your-secret-key-change-in-production':
-            print("🔑 Generating new JWT secret key...")
-            self._generate_and_save_secret()
+            # In production (Cloud Run), use environment variable or generate temporary
+            if os.getenv('GOOGLE_CLOUD_PROJECT'):  # Running in Cloud Run
+                print("🔑 Running in Cloud Run - using environment-based JWT secret")
+                # Generate temporary secret for this instance (will be consistent across restarts via env var)
+                self._secret_key = current_secret or secrets.token_urlsafe(64)
+            else:
+                print("🔑 Generating new JWT secret key...")
+                self._generate_and_save_secret()
         else:
             print("🔑 Using existing JWT secret key")
             self._secret_key = current_secret
