@@ -39,12 +39,12 @@ CREATE TABLE IF NOT EXISTS place (
 """
 
 bookmark_table_sql = """
-CREATE TABLE IF NOT EXISTS bookmark (
+CREATE TABLE IF NOT EXISTS place_bookmark (
     bookmark_id UUID PRIMARY KEY,
     user_id UUID NOT NULL,
     place_id UUID NOT NULL,
     UNIQUE(user_id, place_id),
-    FOREIGN KEY(user_id) REFERENCES user(user_id),
+    FOREIGN KEY(user_id) REFERENCES "user"(id),
     FOREIGN KEY(place_id) REFERENCES place(place_id)
 );
 """
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS rating (
     place_id UUID NOT NULL,
     score INT CHECK(score >= 1 AND score <= 5),
     UNIQUE(user_id, place_id),
-    FOREIGN KEY(user_id) REFERENCES user(user_id),
+    FOREIGN KEY(user_id) REFERENCES "user"(id),
     FOREIGN KEY(place_id) REFERENCES place(place_id)
 );
 """
