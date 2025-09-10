@@ -2,7 +2,7 @@ import uvicorn
 from fastapi import FastAPI
 from user.controller.user import router as user
 from auth.controller.auth import router as auth
-from locations.controller.distance import router as locations
+from locations.controller.locations import router as locations
 
 app = FastAPI()
 
