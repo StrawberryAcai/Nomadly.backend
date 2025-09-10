@@ -1,0 +1,125 @@
+name: Deploy to Google Cloud Run
+
+on:
+  push:
+    branches: [ main, master ]
+env:
+  PROJECT_ID: paradox-intern
+  SERVICE_NAME: nomadly-api
+  REGION: asia-northeast3
+  REPOSITORY: nomadly
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production  # Environment secrets를 사용하기 위해 추가
+    
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - id: 'auth'
+      name: 'Authenticate to Google Cloud'
+      uses: 'google-github-actions/auth@v2'
+      with:
+        workload_identity_provider: 'projects/855262384811/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+        service_account: 'github-actions@paradox-intern.iam.gserviceaccount.com'
+
+    - name: 'Set up Cloud SDK'
+      uses: 'google-github-actions/setup-gcloud@v2'
+
+    - name: 'Configure Docker to use gcloud as a credential helper'
+      run: |
+        gcloud auth configure-docker $REGION-docker.pkg.dev
+
+    - name: 'Build Docker image'
+      run: |
+        docker build -t $REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$SERVICE_NAME:$GITHUB_SHA .
+        docker tag $REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$SERVICE_NAME:$GITHUB_SHA $REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$SERVICE_NAME:latest
+
+    - name: 'Push Docker image'
+      run: |
+        docker push $REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$SERVICE_NAME:$GITHUB_SHA
+        docker push $REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$SERVICE_NAME:latest
+
+    - name: 'Setup Terraform'
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.5.0
+
+    - name: 'Terraform Init'
+      run: |
+        cd terraform
+        terraform init
+
+    - name: 'Make import script executable'
+      run: |
+        cd terraform
+        chmod +x import-existing-resources.sh
+
+    - name: 'Check required secrets'
+      run: |
+        if [ -z "${{ secrets.DATABASE_URL }}" ]; then
+          echo "❌ ERROR: DATABASE_URL secret is not set"
+          echo "Please set DATABASE_URL in GitHub repository secrets"
+          exit 1
+        fi
+        if [ -z "${{ secrets.JWT_SECRET }}" ]; then
+          echo "❌ ERROR: JWT_SECRET secret is not set"  
+          echo "Please set JWT_SECRET in GitHub repository secrets"
+          exit 1
+        fi
+        if [ -z "${{ secrets.OPENAI_API_KEY }}" ]; then
+          echo "❌ ERROR: OPENAI_API_KEY secret is not set"
+          echo "Please set OPENAI_API_KEY in GitHub repository secrets"
+          exit 1
+        fi
+        echo "✅ All required secrets are configured"
+
+    - name: 'Create terraform.tfvars'
+      run: |
+        cd terraform
+        cat > terraform.tfvars << EOF
+        github_owner = "StrawberryAcai"
+        github_repo = "Nomadly.backend"
+        database_url = "${{ secrets.DATABASE_URL }}"
+        jwt_secret = "${{ secrets.JWT_SECRET }}"
+        EOF
+
+    - name: 'Import existing resources'
+      run: |
+        cd terraform
+        ./import-existing-resources.sh
+
+    - name: 'Terraform Plan'
+      run: |
+        cd terraform
+        terraform plan
+
+    - name: 'Terraform Apply'
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      run: |
+        cd terraform
+        terraform apply -auto-approve
+
+    - name: 'Update Cloud Run service with new image'
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      run: |
+        gcloud run deploy $SERVICE_NAME \
+          --image $REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$SERVICE_NAME:$GITHUB_SHA \
+          --region $REGION \
+          --platform managed \
+          --allow-unauthenticated \
+          --port 8000 \
+          --set-env-vars JWT_ALGORITHM=HS256 \
+          --set-env-vars OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
+          --set-secrets DATABASE_URL=database-url:latest \
+          --set-secrets JWT_SECRET=jwt-secret:latest \
+          --max-instances 5 \
+          --timeout 300 \
+          --cpu 1 \
+          --memory 512Mi

@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import OAuth2PasswordBearer
-from pydantic import BaseModel
 
 from auth.service.auth import token_factory
+from user.model.request.user import SignupRequest, UpdatePasswordRequest, UpdateProfileRequest
 from user.model.response.user import UserResponse
 from user.service import user as user_service
 from util.token_factory import TokenFactory
@@ -15,17 +15,6 @@ token_factory = TokenFactory()
 def get_current_user_id(token: str = Depends(oauth2_scheme)) -> uuid.UUID:
     payload = token_factory.decode(token=token)
     return uuid.UUID(payload["user_id"])
-
-class SignupRequest(BaseModel):
-    username: str
-    profile: str = ""
-    password: str
-
-class UpdateProfileRequest(BaseModel):
-    profile: str
-
-class UpdatePasswordRequest(BaseModel):
-    password: str
 
 @router.post("/signup", response_model=UserResponse)
 def signup(req: SignupRequest):

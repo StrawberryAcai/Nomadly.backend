@@ -1,13 +1,21 @@
 import psycopg2
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def get_connection():
-    con = psycopg2.connect(
-        host='aws-1-ap-northeast-2.pooler.supabase.com',
-        dbname='postgres',
-        user='postgres.kgsiyqzruyspbgedwrxp',
-        password='kstoB7ONpsnqU1qX',
-        port=6543
-    )
+    database_url = os.getenv('DATABASE_URL')
+    if database_url:
+        con = psycopg2.connect(database_url)
+    else:
+        con = psycopg2.connect(
+            host=os.getenv('DB_HOST', 'localhost'),
+            dbname=os.getenv('DB_NAME', 'nomadly'),
+            user=os.getenv('DB_USER', 'postgres'),
+            password=os.getenv('DB_PASSWORD', 'postgres'),
+            port=int(os.getenv('DB_PORT', '5432'))
+        )
     cur = con.cursor()
     return con, cur
 
@@ -47,7 +55,18 @@ CREATE TABLE IF NOT EXISTS interest (
 """
 
 def create_all_tables():
-    create_table_if_not_exists("user", user_table_sql)
-    create_table_if_not_exists("interest", interest_table_sql)
+    try:
+        create_table_if_not_exists("user", user_table_sql)
+        create_table_if_not_exists("interest", interest_table_sql)
+        print("✅ Database tables initialized successfully")
+    except Exception as e:
+        print(f"⚠️ Database initialization failed: {e}")
+        # Don't crash the app, just log the error
 
-create_all_tables()
+# Only initialize tables if we're not in import-only mode
+if __name__ != '__main__':
+    try:
+        create_all_tables()
+    except Exception as e:
+        print(f"⚠️ Database connection failed during startup: {e}")
+        print("📝 App will continue without database initialization")
