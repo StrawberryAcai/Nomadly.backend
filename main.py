@@ -4,7 +4,7 @@ from user.controller.user import router as user
 from auth.controller.auth import router as auth
 from locations.controller.distance import router as locations
 from board.controller.document import router as document
-from board.controller.actions import router as actions
+from board.controller.like import router as actions
 
 app = FastAPI()
 
