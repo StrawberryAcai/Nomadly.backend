@@ -2,6 +2,7 @@
 # These will be populated manually or via terraform apply with -var flags
 
 resource "google_secret_manager_secret_version" "database_url" {
+  count       = var.database_url != "" && var.database_url != null ? 1 : 0
   secret      = google_secret_manager_secret.database_url.id
   secret_data = var.database_url
 
@@ -11,6 +12,7 @@ resource "google_secret_manager_secret_version" "database_url" {
 }
 
 resource "google_secret_manager_secret_version" "jwt_secret" {
+  count       = var.jwt_secret != "" && var.jwt_secret != null ? 1 : 0
   secret      = google_secret_manager_secret.jwt_secret.id
   secret_data = var.jwt_secret
 

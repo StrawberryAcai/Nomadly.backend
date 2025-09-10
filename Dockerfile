@@ -24,9 +24,9 @@ USER appuser
 # Expose port (Cloud Run uses PORT env var)
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/docs || exit 1
+# Health check (Cloud Run doesn't need this, but keep for local testing)
+# HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+#     CMD curl -f http://localhost:${PORT:-8000}/docs || exit 1
 
-# Run the application
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the application (Cloud Run will set PORT env var)
+CMD ["python", "main.py"]

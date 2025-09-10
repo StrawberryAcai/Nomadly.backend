@@ -38,11 +38,13 @@ variable "database_url" {
   description = "Database connection URL (will be stored in Secret Manager)"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "jwt_secret" {
   description = "JWT secret key (will be stored in Secret Manager)"
   type        = string
   sensitive   = true
+  default     = ""
 }
 

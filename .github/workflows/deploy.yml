@@ -63,6 +63,20 @@ jobs:
         cd terraform
         chmod +x import-existing-resources.sh
 
+    - name: 'Check required secrets'
+      run: |
+        if [ -z "${{ secrets.DATABASE_URL }}" ]; then
+          echo "❌ ERROR: DATABASE_URL secret is not set"
+          echo "Please set DATABASE_URL in GitHub repository secrets"
+          exit 1
+        fi
+        if [ -z "${{ secrets.JWT_SECRET }}" ]; then
+          echo "❌ ERROR: JWT_SECRET secret is not set"  
+          echo "Please set JWT_SECRET in GitHub repository secrets"
+          exit 1
+        fi
+        echo "✅ All required secrets are configured"
+
     - name: 'Create terraform.tfvars'
       run: |
         cd terraform
@@ -96,4 +110,10 @@ jobs:
           --image $REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$SERVICE_NAME:$GITHUB_SHA \
           --region $REGION \
           --platform managed \
-          --allow-unauthenticated
+          --allow-unauthenticated \
+          --port 8000 \
+          --set-env-vars JWT_ALGORITHM=HS256 \
+          --set-secrets DATABASE_URL=database-url:latest \
+          --set-secrets JWT_SECRET=jwt-secret:latest \
+          --max-instances 5 \
+          --timeout 300
