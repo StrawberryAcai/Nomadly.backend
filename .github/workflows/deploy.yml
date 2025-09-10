@@ -76,6 +76,11 @@ jobs:
           echo "Please set JWT_SECRET in GitHub repository secrets"
           exit 1
         fi
+        if [ -z "${{ secrets.OPENAI_API_KEY }}" ]; then
+          echo "❌ ERROR: OPENAI_API_KEY secret is not set"
+          echo "Please set OPENAI_API_KEY in GitHub repository secrets"
+          exit 1
+        fi
         echo "✅ All required secrets are configured"
 
     - name: 'Create terraform.tfvars'
@@ -114,7 +119,10 @@ jobs:
           --allow-unauthenticated \
           --port 8000 \
           --set-env-vars JWT_ALGORITHM=HS256 \
+          --set-env-vars OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
           --set-secrets DATABASE_URL=database-url:latest \
           --set-secrets JWT_SECRET=jwt-secret:latest \
           --max-instances 5 \
-          --timeout 300
+          --timeout 300 \
+          --cpu 1 \
+          --memory 512Mi
