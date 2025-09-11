@@ -2,12 +2,13 @@ import uuid
 
 from fastapi import APIRouter, Depends
 
+from mypage.model.mypage import MyPlansResponse
 from mypage.service import mypage as service
 from user.controller.user import get_current_user_id
 
 router = APIRouter(prefix="/api/me")
 
-@router.get("/plans")
+@router.get("/plans", response_model=MyPlansResponse)
 def get_plans(
         # user_id: uuid.UUID = Depends(get_current_user_id)
     ):
