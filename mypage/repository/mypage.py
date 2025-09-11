@@ -36,7 +36,7 @@ def get_like_boards(user_id: uuid.UUID):
     cur.execute(
         """
         select 
-            b.plan_id, b.likes, b.title
+            b.plan_id, b.title, b.content, b.likes
         from board b join "like" l
         on b.id = l.board_id
         where b.author = %s;

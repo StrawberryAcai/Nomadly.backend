@@ -16,3 +16,10 @@ class PlanDetailResponse(BaseModel):
 class MyPlansResponse(BaseModel):
     plan_id: uuid.UUID
     plan: PlanDetailResponse
+
+class MyBookmarkResponse(BaseModel):
+    place_id: uuid.UUID
+    name: str
+    address: str
+    overall_bookmark: int
+    overall_rating: float
