@@ -7,22 +7,17 @@ from mypage.repository import mypage as repository
 def get_plans(user_id: uuid.UUID):
     rows = repository.get_plans(user_id)
 
-    plan = []
-    for row in rows:
-        plan.append(
-            PlanItemDetailResponse(
-                todo = row[-3],
-                place = row[-2],
-                time = row[-1]
-            )
-        )
-
     return MyPlansResponse(
         plan_id = rows[0][0],
         plan = PlanDetailResponse(
             start_time = rows[0][1],
             end_time = rows[0][2],
-            plan = plan
+            plan = [
+                PlanItemDetailResponse(
+                    todo = row[-3], place = row[-2], time = row[-1]
+                )
+                for row in rows
+            ]
         )
     )
 
