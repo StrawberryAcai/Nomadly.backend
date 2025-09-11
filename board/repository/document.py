@@ -24,7 +24,7 @@ def get_all_boards(user_id: uuid.UUID):
         LEFT JOIN public."like" l
         ON b.id = l.board_id AND l.user_id = %s;
         """,
-        (str(user_id))
+        (str(user_id), )
     )
 
     return cur.fetchall()
