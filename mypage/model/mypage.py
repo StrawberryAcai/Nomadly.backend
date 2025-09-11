@@ -1,7 +1,7 @@
 import uuid
 from typing import List
 
-from pydantic.v1 import BaseModel
+from pydantic import BaseModel
 
 class PlanItemDetailResponse(BaseModel):
     todo: str
@@ -23,3 +23,9 @@ class MyBookmarkResponse(BaseModel):
     address: str
     overall_bookmark: int
     overall_rating: float
+
+class MyLikeBoardResponse(BaseModel):
+    board_id: uuid.UUID
+    title: str
+    content: str
+    likes: int

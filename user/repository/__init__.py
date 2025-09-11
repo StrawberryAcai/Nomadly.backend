@@ -2,11 +2,11 @@ import psycopg2
 
 def get_connection():
     con = psycopg2.connect(
-        host='localhost',
-        dbname='nomadly',
-        user='postgres',
-        password='postgres',
-        port=5432
+        host='aws-1-ap-northeast-2.pooler.supabase.com',
+        dbname='postgres',
+        user='postgres.kgsiyqzruyspbgedwrxp',
+        password='kstoB7ONpsnqU1qX',
+        port=6543
     )
     cur = con.cursor()
     return con, cur
