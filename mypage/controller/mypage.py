@@ -22,8 +22,8 @@ def get_bookmark_place(
     return service.get_bookmark_place(user_id)
 
 @router.get("/like/board")
-def get_bookmark_plans(
+def get_like_plans(
         # user_id: uuid.UUID = Depends(get_current_user_id)
     ):
     user_id = uuid.UUID("6ee53234-1dc5-44e8-8f3c-b2b98530aca6")
-    return service.get_bookmark_plans(user_id)
+    return service.get_like_plans(user_id)

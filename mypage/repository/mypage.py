@@ -19,8 +19,18 @@ def get_plans(user_id: uuid.UUID):
 
 
 def get_bookmark_place(user_id: uuid.UUID):
-    return None
+    cur.execute(
+        """
+        select 
+            p.place_id, p."name", p.address,
+            p.overall_bookmark, p.overall_rating
+        from place p join place_bookmark b
+        on p.place_id = b.place_id
+        where b.user_id = %s;
+        """, (user_id,)
+    )
+    return con.fetchall()
 
 
-def get_bookmark_plans(user_id: uuid.UUID):
+def get_like_plans(user_id: uuid.UUID):
     return None
