@@ -4,19 +4,23 @@ from user.repository import get_connection
 
 cur, con = get_connection()
 
-def get_plans(
-        user_id: uuid.UUID
-    ):
+def get_plans(user_id: uuid.UUID):
+    cur.execute(
+        """
+        select 
+            p.id, p.start_date, p.end_date,
+            p.private, i.todo, i.place, i."time"
+        from plan p join plan_item i
+        on p.id = i.plan_id
+        where p.author = %s;
+        """, (user_id,)
+    )
+    return con.fetchall()
+
+
+def get_bookmark_place(user_id: uuid.UUID):
     return None
 
 
-def get_bookmark_place(
-        user_id: uuid.UUID
-    ):
-    return None
-
-
-def get_bookmark_plans(
-        user_id: uuid.UUID
-    ):
+def get_bookmark_plans(user_id: uuid.UUID):
     return None
