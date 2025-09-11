@@ -26,7 +26,7 @@ def login(req: LoginRequest, response: Response):
             value=refresh_token,
             httponly=True,
             secure=True,        # HTTPS 환경에서만 전송
-            samesite="strict",  # CSRF 방지
+            samesite="none",  # 다른 도메인 쿠키 허용 (프론트와 백엔드의 도메인이 다름
             max_age=60 * 60 * 24 * 7  # 7일
         )
         return TokenResponse(result=True)
@@ -52,7 +52,7 @@ def reissue(request: Request, response: Response):
             value=new_refresh_token,
             httponly=True,
             secure=True,
-            samesite="strict",
+            samesite="none",
             max_age=60 * 60 * 24 * 7
         )
         return TokenResponse(result=True)
