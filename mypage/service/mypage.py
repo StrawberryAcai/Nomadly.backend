@@ -1,13 +1,21 @@
+import uuid
+
 from mypage.repository import mypage as repository
 
 
-def get_plans():
-    return repository.get_plans()
+def get_plans(
+        user_id: uuid.UUID
+    ):
+    return repository.get_plans(user_id)
 
 
-def get_bookmark_place():
-    return repository.get_bookmark_place()
+def get_bookmark_place(
+        user_id: uuid.UUID
+    ):
+    return repository.get_bookmark_place(user_id)
 
 
-def get_bookmark_plans():
-    return repository.get_bookmark_plans()
+def get_bookmark_plans(
+        user_id: uuid.UUID
+    ):
+    return repository.get_bookmark_plans(user_id)
