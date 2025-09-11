@@ -11,5 +11,5 @@ def get_bookmark_place(user_id: uuid.UUID):
     return repository.get_bookmark_place(user_id)
 
 
-def get_like_plans(user_id: uuid.UUID):
-    return repository.get_like_plans(user_id)
+def get_like_boards(user_id: uuid.UUID):
+    return repository.get_like_boards(user_id)

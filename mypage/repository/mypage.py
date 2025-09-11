@@ -32,5 +32,14 @@ def get_bookmark_place(user_id: uuid.UUID):
     return con.fetchall()
 
 
-def get_like_plans(user_id: uuid.UUID):
-    return None
+def get_like_boards(user_id: uuid.UUID):
+    cur.execute(
+        """
+        select 
+            b.plan_id, b.likes, b.title
+        from board b join "like" l
+        on b.id = l.board_id
+        where b.author = %s;
+        """, (user_id,)
+    )
+    return con.fetchall()
