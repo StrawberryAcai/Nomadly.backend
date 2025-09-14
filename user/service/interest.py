@@ -17,3 +17,6 @@ def delete_interest(interest_id: int) -> int:
 
 def list_interests() -> List[Interest]:
     return interest_repo.list_interests()
+
+def get_user_interests(user_id: uuid.UUID) -> List[Interest]:
+    return interest_repo.get_interests_by_user_id(user_id)

@@ -44,3 +44,11 @@ def list_interests() -> list[Interest]:
     cur.execute("SELECT id, user_id, interest FROM interest")
     rows = cur.fetchall()
     return [Interest(id=row[0], user_id=uuid.UUID(row[1]), interest=row[2]) for row in rows]
+
+def get_interests_by_user_id(user_id: uuid.UUID) -> list[Interest]:
+    cur.execute(
+        "SELECT id, user_id, interest FROM interest WHERE user_id = %s",
+        (str(user_id),)
+    )
+    rows = cur.fetchall()
+    return [Interest(id=row[0], user_id=uuid.UUID(row[1]), interest=row[2]) for row in rows]
