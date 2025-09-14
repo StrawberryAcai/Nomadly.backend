@@ -6,6 +6,7 @@ from user.controller.user import router as user
 from user.controller.interest import router as interest
 from auth.controller.auth import router as auth
 from locations.controller.distance import router as locations
+from mypage.controller.mypage import router as mypage
 from board.controller.document import router as document
 from board.controller.like import router as actions
 
@@ -33,6 +34,7 @@ app.include_router(router=user)
 app.include_router(router=interest)
 app.include_router(router=auth)
 app.include_router(router=locations)
+app.include_router(router=mypage)
 app.include_router(router=document)
 app.include_router(router=actions)
 
