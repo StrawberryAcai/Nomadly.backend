@@ -1,7 +1,7 @@
 from httpx import AsyncClient
 from typing import Dict, Any, Optional
 from httpx import Response
-from exceptions import *
+from .exceptions import *
 
 BASE_URL = "http://apis.data.go.kr/B551011/KorService2"
 
@@ -135,7 +135,7 @@ class TourAPIClient:
         lcls1: Optional[str] = None, lcls2: Optional[str] = None, lcls3: Optional[str] = None,
         num_of_rows: Optional[int] = None, page_no: Optional[int] = None,
     ) -> Dict[str, Any]:
-        _require(1 <= radius <= 20000, "radius 1~20000(m) 범위 필요")
+        _require(1 <= int(radius) <= 20000, "radius 1~20000(m) 범위 필요")
         if cat2 is not None:
             _require(cat1 is not None, "cat2 사용 시 cat1 필요")
         if cat3 is not None:
