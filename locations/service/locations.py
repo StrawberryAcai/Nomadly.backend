@@ -1,70 +1,132 @@
-from tourapi.client import TourAPIClient
-from haversine import haversine
-from locations.repository.place import PlaceRepository
 import os
+from decimal import Decimal
+from typing import Any, Dict, List
+from haversine import haversine
+from tourapi.client import TourAPIClient
 
-async def recommend(typeId: int, longitude: float, latitude: float):
-    """
-    특정 위치를 기준으로 추천 장소를 반환합니다.
+from locations.repository.place import PlaceRepository
+from locations.constants import CONTENTTYPE
+from locations.model.response.response import RecommendResponse
 
-    Args:
-        typeId (int): 콘텐츠 유형 ID
-        longitude (float): 사용자의 경도
-        latitude (float): 사용자의 위도
+def _to_float(v, default=0.0) -> float:
+    if v is None:
+        return default
+    if isinstance(v, Decimal):
+        return float(v)
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str):
+        try:
+            return float(v)
+        except ValueError:
+            return default
+    return default
 
-    Returns:
-        list: 추천 장소 목록
-    """
-    # 사용자가 반경으로 얼마나 멀리까지 정보를 찾을지 뜻합니다
-    max_distance = 10000
+def _to_int(v, default=0) -> int:
+    if v is None:
+        return default
+    if isinstance(v, Decimal):
+        return int(v)
+    if isinstance(v, int):
+        return v
+    if isinstance(v, float):
+        return int(v)
+    if isinstance(v, str):
+        try:
+            return int(v)
+        except ValueError:
+            try:
+                return int(float(v))
+            except ValueError:
+                return default
+    return default
 
-    # TourAPI 클라이언트 초기화
-    tourapi_key = os.environ.get("TOURAPI_KEY")
-    if not tourapi_key:
+def _distance_int(meters: float) -> int:
+    return int(round(_to_float(meters, 0.0)))
+
+async def recommend(typeId: int, longitude: float, latitude: float) -> RecommendResponse:
+    max_distance_m = 10_000
+
+    api_key = os.getenv("TOURAPI_KEY")
+    if not api_key:
         raise ValueError("TOURAPI_KEY 환경 변수가 설정되지 않았습니다.")
-    client = TourAPIClient(tourapi_key)
+    client = TourAPIClient(api_key)
 
-    # PlaceRepository 초기화
     place_repo = PlaceRepository()
+    type_name = next((k for k, v in CONTENTTYPE.items() if v == typeId), str(typeId))
 
-    res = []
-    items = await client.get_location_based_list(
-        arrange='Q',
+    api_resp: Dict[str, Any] = await client.get_location_based_list(
+        arrange="Q",
         content_type_id=typeId,
         map_x=longitude,
         map_y=latitude,
-        radius=max_distance
+        radius=max_distance_m,
     )
-    items = items['response']['body']['items']['item']
+
+    items = (
+        api_resp.get("response", {})
+                .get("body", {})
+                .get("items", {})
+                .get("item", [])
+    )
+    if not isinstance(items, list):
+        items = [items] if items else []
+
+    origin = (latitude, longitude)
+    results: List[Dict[str, Any]] = []
 
     for item in items:
-        if not item.get('firstimage'):  # 이미지가 없는 항목은 제외
+        if not item:
             continue
 
-        origin = (latitude, longitude)
-        destination = (item['mapy'], item['mapx'])
+        title = str(item.get("title", "")).strip()
+        img = item.get("firstimage")
+        if not img:
+            continue
 
-        # 장소 이름으로 DB에서 정보 가져오기
-        place_info = place_repo.get_place_by_name(item['title'])
+        dest_y = _to_float(item.get("mapy"))
+        dest_x = _to_float(item.get("mapx"))
+        if dest_x == 0.0 or dest_y == 0.0:
+            continue
+
+        try:
+            distance_m = haversine(origin, (dest_y, dest_x), unit="m")
+        except Exception:
+            continue
+
+        place_info = place_repo.get_place_by_name(title)
+
+        rating = 0.0
+        bookmark_cnt = 0
         if place_info:
-            rating = place_info.get('overall_rating', 0)
-            bookmark_cnt = place_info.get('overall_bookmark', 0)
-
-            # 트렌드 계산: 최근 북마크 수가 일정 기준 이상이면 트렌드로 간주
-            trend = bookmark_cnt > 100  # 예: 북마크 수가 100 이상이면 트렌드
+            if isinstance(place_info, dict):
+                rating = _to_float(place_info.get("overall_rating"), 0.0)
+                bookmark_cnt = _to_int(place_info.get("overall_bookmark"), 0)
+            else:
+                # SELECT place_id, name, address, overall_rating, overall_bookmark
+                try:
+                    rating = _to_float(place_info[3], 0.0)
+                    bookmark_cnt = _to_int(place_info[4], 0)
+                except Exception:
+                    rating = 0.0
+                    bookmark_cnt = 0
         else:
-            # DB에 없는 경우 기본값 설정
             rating = 4.9
             bookmark_cnt = 0
-            trend = False
 
-        res.append({
-            "place_name": item['title'],
-            "rating": rating,
-            "trend": trend,
-            "bookmark_cnt": bookmark_cnt,
-            "distance": haversine(origin, destination, unit='m'),
-            "image": item['firstimage'],
+        # 트렌드 간단 로직
+        trend = bookmark_cnt > 100
+
+        results.append({
+            "place_name": title,
+            "rating": float(rating),
+            "trend": bool(trend),
+            "bookmark_cnt": int(bookmark_cnt),
+            "distance": _distance_int(distance_m),
+            "image": str(img),
         })
 
-    return res
+    return RecommendResponse(
+        type=type_name,
+        items=results
+    )

@@ -9,8 +9,17 @@ from locations.controller.locations import router as locations
 from locations.controller.place_bookmark import router as place_bookmark
 from locations.controller.rating import router as rating
 from locations.controller.place import router as place
+from locations.repository import apply_rating_trigger_migration
 
 app = FastAPI()
+
+@app.on_event("startup")
+def _apply_db_triggers():
+    try:
+        apply_rating_trigger_migration()
+    except Exception as e:
+        # 필요 시 로깅
+        print(f"DB trigger migration skipped: {e}")
 
 # 라우터 등록
 app.include_router(router=user)

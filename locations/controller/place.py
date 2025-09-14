@@ -1,44 +1,68 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from typing import Optional
-from uuid import UUID, uuid4
-from locations.repository.place import PlaceRepository
+from fastapi import APIRouter, HTTPException, Path
+from locations.model.response.place import PlaceResponse
+from locations.service.place import PlaceService
 
-router = APIRouter(prefix="/api/locations/place")
+router = APIRouter(prefix="/api/locations/place", tags=["장소"])
 
-# 요청 모델
-class PlaceRequest(BaseModel):
-    name: str  # 장소 이름
-    address: Optional[str] = None  # 장소 주소 (선택적)
-
-# 응답 모델
-class PlaceResponse(BaseModel):
-    place_id: UUID
-    name: str
-    address: Optional[str]
-    overall_rating: float
-    overall_bookmark: int
-
-@router.get("/{place_name}", response_model=PlaceResponse)
-async def get_or_create_place(place_name: str):
-    """
-    장소 정보를 가져오거나, 없으면 새로 생성합니다.
-    """
-    place_repo = PlaceRepository()
-
-    # 장소 이름으로 검색
-    place = place_repo.get_place_by_name(place_name)
-    if place:
-        return place
-
-    # 장소가 없으면 새로 생성
-    try:
-        new_place_id = uuid4()
-        new_place = place_repo.create_place(
-            place_id=new_place_id,
-            name=place_name,
-            address=None  # 주소는 기본값으로 None
-        )
-        return new_place
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"장소 생성 중 오류 발생: {str(e)}")
+@router.get(
+    "/{place_name}",
+    response_model=PlaceResponse,
+    summary="장소 조회 또는 생성",
+    description=(
+        "주어진 장소 이름으로 장소를 조회합니다.\n"
+        "- 존재하면 기존 장소 정보를 반환합니다.\n"
+        "- 존재하지 않으면 새 장소를 생성한 뒤 반환합니다.\n"
+        "이름 양끝의 따옴표는 제거되고, 제어문자는 필터링됩니다."
+    ),
+    response_description="요청한 장소 정보",
+    responses={
+        200: {
+            "description": "장소 정보를 반환합니다.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "place_id": "123e4567-e89b-12d3-a456-426614174000",
+                        "name": "스타벅스 강남점",
+                        "address": "서울특별시 강남구 테헤란로 00",
+                        "overall_rating": 4.5,
+                        "overall_bookmark": 10,
+                    }
+                }
+            },
+        },
+        400: {
+            "description": "잘못된 요청(장소 이름이 유효하지 않음).",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "유효하지 않은 장소 이름입니다."}
+                }
+            },
+        },
+        500: {
+            "description": "서버 내부 오류",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "parse_error": {
+                            "summary": "결과 파싱 오류",
+                            "value": {"detail": "장소 생성 결과를 해석할 수 없습니다."},
+                        },
+                        "create_error": {
+                            "summary": "생성 처리 중 오류",
+                            "value": {"detail": "장소 생성 중 오류: ..."},
+                        },
+                    }
+                }
+            },
+        },
+    },
+)
+async def get_or_create_place(
+    place_name: str = Path(
+        ...,
+        description="조회하거나 생성할 장소 이름",
+        example="스타벅스 강남점",
+    )
+):
+    service = PlaceService()
+    return service.get_or_create_place(place_name)

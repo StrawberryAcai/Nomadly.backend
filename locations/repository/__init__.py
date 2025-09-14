@@ -18,6 +18,56 @@ def get_connection() -> tuple[connection, cursor]:
     cur = con.cursor()
     return con, cur
 
+# ...existing code...
+import psycopg2
+
+def apply_rating_trigger_migration() -> None:
+    """
+    rating 변경 시 place.overall_rating 자동 갱신 트리거/함수 생성 (idempotent)
+    """
+    fn_sql = """
+    CREATE OR REPLACE FUNCTION refresh_place_overall_rating() RETURNS TRIGGER AS $$
+    DECLARE
+      affected uuid;
+    BEGIN
+      affected := COALESCE(NEW.place_id, OLD.place_id);
+      UPDATE place p
+      SET overall_rating = (
+          SELECT COALESCE(ROUND(AVG(r.score)::numeric, 1), 0)::numeric(2,1)
+          FROM rating r
+          WHERE r.place_id = p.place_id
+      )
+      WHERE p.place_id = affected;
+      RETURN COALESCE(NEW, OLD);
+    END;
+    $$ LANGUAGE plpgsql;
+    """
+    trg_sql = """
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'trg_rating_refresh_place'
+      ) THEN
+        CREATE TRIGGER trg_rating_refresh_place
+        AFTER INSERT OR UPDATE OR DELETE ON rating
+        FOR EACH ROW
+        EXECUTE PROCEDURE refresh_place_overall_rating();
+      END IF;
+    END$$;
+    """
+    con, cur = get_connection()
+    try:
+        cur.execute(fn_sql)
+        cur.execute(trg_sql)
+        con.commit()
+    except Exception:
+        con.rollback()
+        raise
+    finally:
+        cur.close()
+        con.close()
+
+
 def create_table_if_not_exists(table_name, create_sql):
     con, cur = get_connection()
     try:

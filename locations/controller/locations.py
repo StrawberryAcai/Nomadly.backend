@@ -1,50 +1,78 @@
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
-from typing import List
+from fastapi import APIRouter, HTTPException, Body
 from locations.service.locations import recommend
+from locations.model.request.request import RecommendRequest
+from locations.model.response.response import RecommendResponse
+from locations.constants import CONTENTTYPE
 
-router = APIRouter(prefix="/api")
+router = APIRouter(prefix="/api", tags=["장소 추천"])
 
-# 콘텐츠 타입 매핑
-CONTENTTYPE = {
-    "관광지": 12,
-    "문화시설": 14,
-    "축제공연행사": 15,
-    "여행코스": 25,
-    "레포츠": 28,
-    "숙박": 32,
-    "쇼핑": 38,
-    "음식점": 39
-}
 
-# 요청 모델
-class RecommendRequest(BaseModel):
-    type: str  # 콘텐츠 유형 (예: "관광지")
-    longitude: float  # 사용자의 경도
-    latitude: float  # 사용자의 위도
-
-# 응답 모델
-class RecommendResponse(BaseModel):
-    place_name: str
-    rating: float
-    trend: bool
-    bookmark_cnt: int
-    distance: float
-    image: str
-
-@router.post("/locations", response_model=List[RecommendResponse])
-async def locations(req: RecommendRequest):
-    """
-    사용자의 위치와 콘텐츠 유형을 기반으로 추천 장소를 반환합니다.
-    """
+@router.post(
+    "/locations",
+    response_model=RecommendResponse,
+    summary="사용자 위치 기반 장소 추천",
+    description="요청한 콘텐츠 유형(type)과 기준 좌표(origin: 경도/위도)를 바탕으로 추천 장소 목록을 반환합니다.",
+    response_description="추천 결과가 포함된 RecommendResponse를 반환합니다.",
+    tags=["장소 추천"],
+    responses={
+        400: {
+            "description": "유효하지 않은 콘텐츠 유형입니다.",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "invalidType": {
+                            "summary": "지원하지 않는 type",
+                            "value": {"detail": "유효하지 않은 콘텐츠 유형입니다."}
+                        }
+                    }
+                }
+            },
+        },
+        500: {
+            "description": "내부 서버 오류",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "serverError": {
+                            "summary": "예상치 못한 오류",
+                            "value": {"detail": "서버 내부 오류가 발생했습니다."}
+                        }
+                    }
+                }
+            },
+        },
+    },
+)
+async def locations(
+    req: RecommendRequest = Body(
+        ...,
+        title="추천 요청 본문",
+        description="추천을 위한 콘텐츠 유형과 기준 좌표를 전달합니다.",
+        examples={
+            "tourExample": {
+                "summary": "관광지 추천 요청",
+                "value": {
+                    "type": "관광지",
+                    "origin": {"longitude": 126.9780, "latitude": 37.5665}
+                }
+            },
+            "foodExample": {
+                "summary": "맛집 추천 요청",
+                "value": {
+                    "type": "맛집",
+                    "origin": {"longitude": 129.0756, "latitude": 35.1796}
+                }
+            }
+        },
+    )
+):
     # 콘텐츠 유형 검증
     type_id = CONTENTTYPE.get(req.type)
     if not type_id:
         raise HTTPException(status_code=400, detail="유효하지 않은 콘텐츠 유형입니다.")
 
     try:
-        # 추천 장소 가져오기
-        recommendations = await recommend(type_id, req.longitude, req.latitude)
-        return recommendations
+        # RecommendResponse 객체 반환
+        return await recommend(type_id, req.origin.longitude, req.origin.latitude)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

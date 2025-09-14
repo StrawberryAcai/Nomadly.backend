@@ -1,56 +1,151 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Body, Path, status, Depends, Security
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from uuid import UUID
-from locations.repository.place_bookmark import BookmarkRepository
+from locations.model.request.bookmark import BookmarkRequest
+from locations.model.response.bookmark import BookmarkResponse
+from locations.service.bookmark import BookmarkService
 
-router = APIRouter(prefix="/api/locations/bookmark")
+router = APIRouter(
+    prefix="/api/locations/bookmark",
+    tags=["북마크"],
+    responses={500: {"description": "서버 내부 오류"}},
+)
 
-# 요청 모델
-class BookmarkRequest(BaseModel):
-    place_id: UUID  # 장소 ID
-    user_id: UUID  # 사용자 ID
+# 인증 설정
+security = HTTPBearer(auto_error=False)
 
-# 응답 모델
-class BookmarkResponse(BaseModel):
-    place_id: UUID
+class CurrentUser(BaseModel):
     user_id: UUID
-    is_bookmarked: bool
 
-@router.get("/{place_id}/{user_id}", response_model=BookmarkResponse)
-async def get_bookmark_status(place_id: UUID, user_id: UUID):
-    """
-    특정 장소에 대한 사용자의 북마크 상태를 반환합니다.
-    """
-    bookmark_repo = BookmarkRepository()
-
-    # 북마크 상태 확인
-    is_bookmarked = bookmark_repo.is_bookmarked(place_id=place_id, user_id=user_id)
-    return BookmarkResponse(place_id=place_id, user_id=user_id, is_bookmarked=is_bookmarked)
-
-@router.post("/", response_model=BookmarkResponse)
-async def add_bookmark(req: BookmarkRequest):
-    """
-    특정 장소에 북마크를 추가합니다.
-    """
-    bookmark_repo = BookmarkRepository()
-
+def _get_current_user(credentials: HTTPAuthorizationCredentials = Security(security)) -> CurrentUser:
+    if not credentials or credentials.scheme.lower() != "bearer":
+        raise HTTPException(status_code=401, detail="인증 토큰이 필요합니다.")
+    token = credentials.credentials
     try:
-        # 북마크 추가
-        bookmark_repo.add_bookmark(place_id=req.place_id, user_id=req.user_id)
-        return BookmarkResponse(place_id=req.place_id, user_id=req.user_id, is_bookmarked=True)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"북마크 추가 중 오류 발생: {str(e)}")
-
-@router.delete("/", response_model=BookmarkResponse)
-async def remove_bookmark(req: BookmarkRequest):
-    """
-    특정 장소에서 북마크를 삭제합니다.
-    """
-    bookmark_repo = BookmarkRepository()
-
+        # 프로젝트의 토큰 유틸에 맞게 디코드/검증
+        from auth.service.auth import token_factory
+        try:
+            payload = token_factory.decode(token)
+        except Exception:
+            payload = token_factory.verify(token)
+    except Exception:
+        raise HTTPException(status_code=401, detail="유효하지 않은 토큰입니다.")
+    uid = payload.get("user_id") or payload.get("sub") or payload.get("uid")
+    if not uid:
+        raise HTTPException(status_code=401, detail="토큰에 사용자 정보가 없습니다.")
     try:
-        # 북마크 삭제
-        bookmark_repo.remove_bookmark(place_id=req.place_id, user_id=req.user_id)
-        return BookmarkResponse(place_id=req.place_id, user_id=req.user_id, is_bookmarked=False)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"북마크 삭제 중 오류 발생: {str(e)}")
+        return CurrentUser(user_id=UUID(str(uid)))
+    except Exception:
+        raise HTTPException(status_code=401, detail="토큰의 사용자 ID가 유효하지 않습니다.")
+
+@router.get(
+    "/{place_id}/{user_id}",
+    response_model=BookmarkResponse,
+    summary="북마크 상태 조회",
+    description="특정 장소에 대해 사용자의 북마크 여부를 확인합니다.",
+    response_description="북마크 상태 응답",
+    responses={
+        200: {
+            "description": "성공",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "place_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        "user_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                        "is_bookmarked": True
+                    }
+                }
+            }
+        }
+    },
+)
+async def get_bookmark_status(
+    place_id: UUID = Path(..., description="장소 ID"),
+    user_id: UUID = Path(..., description="사용자 ID"),
+    current: CurrentUser = Depends(_get_current_user),
+):
+    service = BookmarkService()
+    return service.get_status(place_id=place_id, user_id=user_id, current_user_id=current.user_id)
+
+@router.post(
+    "/",
+    response_model=BookmarkResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="북마크 추가",
+    description="사용자의 장소 북마크를 추가합니다.",
+    response_description="추가된 북마크 상태",
+    responses={
+        201: {
+            "description": "생성됨",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "place_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        "user_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                        "is_bookmarked": True
+                    }
+                }
+            }
+        }
+    },
+)
+async def add_bookmark(
+    req: BookmarkRequest = Body(
+        ...,
+        description="북마크 추가 요청 바디",
+        examples={
+            "기본": {
+                "summary": "북마크 추가 예시",
+                "value": {
+                    "place_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                    "user_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+                }
+            }
+        },
+    ),
+    current: CurrentUser = Depends(_get_current_user),
+):
+    service = BookmarkService()
+    return service.add_bookmark(req, current_user_id=current.user_id)
+
+@router.delete(
+    "/",
+    response_model=BookmarkResponse,
+    status_code=status.HTTP_200_OK,
+    summary="북마크 삭제",
+    description="사용자의 장소 북마크를 삭제합니다.",
+    response_description="삭제된 북마크 상태",
+    responses={
+        200: {
+            "description": "성공",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "place_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        "user_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                        "is_bookmarked": False
+                    }
+                }
+            }
+        }
+    },
+)
+async def remove_bookmark(
+    req: BookmarkRequest = Body(
+        ...,
+        description="북마크 삭제 요청 바디",
+        examples={
+            "기본": {
+                "summary": "북마크 삭제 예시",
+                "value": {
+                    "place_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                    "user_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+                }
+            }
+        },
+    ),
+    current: CurrentUser = Depends(_get_current_user),
+):
+    service = BookmarkService()
+    return service.remove_bookmark(req, current_user_id=current.user_id)
