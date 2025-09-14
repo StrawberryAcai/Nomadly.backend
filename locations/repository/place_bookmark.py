@@ -1,46 +1,65 @@
-from user.entity.interest import Interest
 import uuid
+from typing import List, Dict, Any
+from locations.repository import get_connection
+from locations.repository.place import PlaceRepository
 
-from user.repository import get_connection
+class BookmarkRepository:
+    def __init__(self):
+        self.places = PlaceRepository()
 
-con, cur = get_connection()
+    def add_bookmark(self, *, bookmark_id: uuid.UUID, user_id: uuid.UUID, place_id: uuid.UUID) -> Dict[str, Any]:
+        sql = """
+        INSERT INTO place_bookmark (bookmark_id, user_id, place_id)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (user_id, place_id) DO NOTHING
+        RETURNING bookmark_id, user_id, place_id;
+        """
+        con, cur = get_connection()
+        try:
+            cur.execute(sql, (str(bookmark_id), str(user_id), str(place_id)))
+            row = cur.fetchone()  # None이면 이미 존재했던 것
+            con.commit()
+        except Exception:
+            con.rollback()
+            raise
+        finally:
+            cur.close()
+            con.close()
 
-def create_interest(user_id: uuid.UUID, interest: str) -> int:
-    cur.execute(
-        "INSERT INTO interest (user_id, interest) VALUES (%s, %s) RETURNING id",
-        (str(user_id), interest)
-    )
-    interest_id = cur.fetchone()[0]
-    con.commit()
-    return interest_id
+        refreshed = self.places.refresh_aggregates(place_id)
+        return {"bookmark": row, "place": refreshed}
 
-def get_interest(interest_id: int) -> Interest | None:
-    cur.execute(
-        "SELECT id, user_id, interest FROM interest WHERE id = %s",
-        (interest_id,)
-    )
-    row = cur.fetchone()
-    if row:
-        return Interest(id=row[0], user_id=uuid.UUID(row[1]), interest=row[2])
-    return None
+    def remove_bookmark(self, *, user_id: uuid.UUID, place_id: uuid.UUID) -> Dict[str, Any]:
+        sql = "DELETE FROM place_bookmark WHERE user_id = %s AND place_id = %s;"
+        con, cur = get_connection()
+        try:
+            cur.execute(sql, (str(user_id), str(place_id)))
+            deleted = cur.rowcount > 0
+            con.commit()
+        except Exception:
+            con.rollback()
+            raise
+        finally:
+            cur.close()
+            con.close()
 
-def update_interest(interest_id: int, user_id: uuid.UUID, interest: str) -> int:
-    cur.execute(
-        "UPDATE interest SET user_id = %s, interest = %s WHERE id = %s",
-        (str(user_id), interest, interest_id)
-    )
-    con.commit()
-    return cur.rowcount
+        refreshed = self.places.refresh_aggregates(place_id)
+        return {"deleted": deleted, "place": refreshed}
 
-def delete_interest(interest_id: int) -> int:
-    cur.execute(
-        "DELETE FROM interest WHERE id = %s",
-        (interest_id,)
-    )
-    con.commit()
-    return cur.rowcount
-
-def list_interests() -> list[Interest]:
-    cur.execute("SELECT id, user_id, interest FROM interest")
-    rows = cur.fetchall()
-    return [Interest(id=row[0], user_id=uuid.UUID(row[1]), interest=row[2]) for row in rows
+    def list_user_bookmarks(self, user_id: uuid.UUID, *, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+        sql = """
+        SELECT b.bookmark_id, b.user_id, b.place_id,
+               p.name, p.address, p.overall_rating, p.overall_bookmark
+        FROM place_bookmark b
+        JOIN place p ON p.place_id = b.place_id
+        WHERE b.user_id = %s
+        ORDER BY p.overall_bookmark DESC
+        LIMIT %s OFFSET %s;
+        """
+        con, cur = get_connection()
+        try:
+            cur.execute(sql, (str(user_id), limit, offset))
+            return cur.fetchall()
+        finally:
+            cur.close()
+            con.close()

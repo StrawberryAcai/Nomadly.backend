@@ -1,12 +1,16 @@
 import psycopg2
+import os
 
 def get_connection():
+    """
+    Supabase PostgreSQL 데이터베이스에 연결합니다.
+    """
     con = psycopg2.connect(
-        host='localhost',
-        dbname='nomadly',
-        user='postgres',
-        password='postgres',
-        port=5432
+        host=os.getenv("DB_HOST", "localhost"),
+        database=os.getenv("DB_NAME", "postgres"),
+        user=os.getenv("DB_USER", "postgres"),
+        password=os.getenv("DB_PASSWORD", ""),
+        port=os.getenv("DB_PORT", 5432)
     )
     cur = con.cursor()
     return con, cur

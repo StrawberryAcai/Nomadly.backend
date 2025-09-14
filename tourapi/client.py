@@ -1,7 +1,7 @@
 from httpx import AsyncClient
 from typing import Dict, Any, Optional
 from httpx import Response
-from exceptions import *
+from .exceptions import *
 
 BASE_URL = "http://apis.data.go.kr/B551011/KorService2"
 
