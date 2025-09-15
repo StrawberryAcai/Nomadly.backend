@@ -18,8 +18,6 @@ def get_connection():
         )
     cur = con.cursor()
     return con, cur
-    
-import psycopg2
 
 def apply_rating_trigger_migration() -> None:
     """
