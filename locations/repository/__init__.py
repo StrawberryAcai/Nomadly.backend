@@ -3,21 +3,7 @@ import psycopg2
 import os
 import psycopg2
 from psycopg2.extensions import connection, cursor
-
-def get_connection():
-    database_url = os.getenv('DATABASE_URL')
-    if database_url:
-        con = psycopg2.connect(database_url)
-    else:
-        con = psycopg2.connect(
-            host=os.getenv('DB_HOST', 'localhost'),
-            dbname=os.getenv('DB_NAME', 'nomadly'),
-            user=os.getenv('DB_USER', 'postgres'),
-            password=os.getenv('DB_PASSWORD', 'postgres'),
-            port=int(os.getenv('DB_PORT', '5432'))
-        )
-    cur = con.cursor()
-    return con, cur
+from user.repository import get_connection
 
 def apply_rating_trigger_migration() -> None:
     """
