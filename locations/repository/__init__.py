@@ -4,21 +4,21 @@ import os
 import psycopg2
 from psycopg2.extensions import connection, cursor
 
-def get_connection() -> tuple[connection, cursor]:
-    """
-    Supabase PostgreSQL 데이터베이스에 연결합니다.
-    """
-    con = psycopg2.connect(
-        host=os.getenv("DB_HOST", "localhost"),
-        database=os.getenv("DB_NAME", "postgres"),
-        user=os.getenv("DB_USER", "postgres"),
-        password=os.getenv("DB_PASSWORD", ""),
-        port=os.getenv("DB_PORT", 5432)
-    )
+def get_connection():
+    database_url = os.getenv('DATABASE_URL')
+    if database_url:
+        con = psycopg2.connect(database_url)
+    else:
+        con = psycopg2.connect(
+            host=os.getenv('DB_HOST', 'localhost'),
+            dbname=os.getenv('DB_NAME', 'nomadly'),
+            user=os.getenv('DB_USER', 'postgres'),
+            password=os.getenv('DB_PASSWORD', 'postgres'),
+            port=int(os.getenv('DB_PORT', '5432'))
+        )
     cur = con.cursor()
     return con, cur
-
-# ...existing code...
+    
 import psycopg2
 
 def apply_rating_trigger_migration() -> None:
