@@ -1,5 +1,5 @@
 from typing import Any, Dict, Optional
-from uuid import uuid4
+from uuid import uuid4, UUID  # UUID 추가
 from urllib.parse import unquote
 import re
 from fastapi import HTTPException
@@ -8,7 +8,7 @@ from httpx import AsyncClient  # Kakao Local REST 호출용
 from haversine import haversine  # 거리 계산
 
 from locations.repository.place import PlaceRepository
-from locations.model.response.place import PlaceResponse
+from locations.model.response.place import PlaceResponse, PlaceDetailResponse
 
 class PlaceService:
     def __init__(self) -> None:
@@ -20,6 +20,15 @@ class PlaceService:
             s = s[1:-1]
         s = re.sub(r'[\x00-\x1F\x7F]', '', s)
         return s
+
+    def _one_line(self, text: str, max_len: int = 140) -> str:
+        """
+        여러 줄 텍스트를 한 줄 요약으로 변환하고 길이를 제한합니다.
+        """
+        if not text:
+            return ""
+        s = re.sub(r"\s+", " ", text).strip()
+        return s if len(s) <= max_len else (s[: max_len - 1] + "…")
 
     def _row_to_place_dict(self, row: Any) -> Optional[Dict[str, Any]]:
         if not row:
@@ -140,6 +149,82 @@ class PlaceService:
         except Exception:
             return ""
 
+    async def _fetch_detail_from_tourapi(self, keyword: str) -> Optional[Dict[str, Any]]:
+        """
+        TourAPI 키워드 검색으로 좌표를 찾고, detailCommon2로 overview(개요)를 보조 조회합니다.
+        """
+        api_key = os.getenv("TOURAPI_KEY")
+        if not api_key or not keyword.strip():
+            return None
+        base = "http://apis.data.go.kr/B551011/KorService2/searchKeyword2"
+        params = {
+            "serviceKey": api_key,
+            "_type": "json",
+            "MobileOS": "ETC",
+            "MobileApp": "Nomadly",
+            "keyword": keyword,
+            "numOfRows": 1,
+            "pageNo": 1,
+            "arrange": "Q",
+        }
+        try:
+            async with AsyncClient(timeout=10.0) as client:
+                r = await client.get(base, params=params)
+                r.raise_for_status()
+                data = r.json()
+            items = (data.get("response", {}).get("body", {}).get("items", {}).get("item", [])) or []
+            if not isinstance(items, list):
+                items = [items]
+            if not items:
+                return None
+            it = items[0] or {}
+            name = (it.get("title") or keyword).strip()
+            addr = (it.get("addr1") or it.get("addr2") or "").strip()
+            try:
+                lon = float(it.get("mapx")) if it.get("mapx") is not None else None
+                lat = float(it.get("mapy")) if it.get("mapy") is not None else None
+            except Exception:
+                lon, lat = None, None
+
+            # detailCommon2로 overview 보강 (가능하면)
+            overview = ""
+            content_id = it.get("contentid") or it.get("contentId")
+            if content_id:
+                try:
+                    detail_base = "http://apis.data.go.kr/B551011/KorService2/detailCommon2"
+                    detail_params = {
+                        "serviceKey": api_key,
+                        "_type": "json",
+                        "MobileOS": "ETC",
+                        "MobileApp": "Nomadly",
+                        "contentId": content_id,
+                        "overviewYN": "Y",
+                        "defaultYN": "N",
+                    }
+                    async with AsyncClient(timeout=10.0) as client:
+                        dr = await client.get(detail_base, params=detail_params)
+                        dr.raise_for_status()
+                        ddata = dr.json()
+                    ditem = (
+                        ddata.get("response", {})
+                             .get("body", {})
+                             .get("items", {})
+                             .get("item", [])
+                    )
+                    if not isinstance(ditem, list):
+                        ditem = [ditem] if ditem else []
+                    if ditem:
+                        overview = (ditem[0] or {}).get("overview") or ""
+                except Exception:
+                    overview = ""
+
+            desc = self._one_line(overview or addr or name)
+            if lon is None or lat is None:
+                return None
+            return {"name": name, "longitude": lon, "latitude": lat, "description": desc}
+        except Exception:
+            return None
+
     def _compute_distance_m(self, origin_lon: float, origin_lat: float, dest_lon: float, dest_lat: float) -> int:
         """
         경위도(경도, 위도)로부터 거리(m)를 정수로 반환
@@ -243,3 +328,43 @@ class PlaceService:
         if not payload.get("image"):
             payload["image"] = await self._fetch_image_from_tourapi(payload["place_name"]) or ""
         return PlaceResponse(**payload)
+
+    async def get_place_detail(self, q: str, longitude: Optional[float] = None, latitude: Optional[float] = None) -> PlaceDetailResponse:
+        """
+        DB 비의존 상세 조회:
+        - Kakao Local → 좌표/주소로 한줄 설명 구성, TourAPI overview 있으면 우선 사용
+        - 실패 시 TourAPI 키워드 검색으로 보조
+        """
+        key = (q or "").strip()
+        if not key:
+            raise HTTPException(status_code=400, detail="유효하지 않은 입력입니다.")
+
+        # 1) Kakao Local 우선
+        kakao = await self._fetch_from_kakao(key)
+        if (kakao and kakao.get("longitude") is not None and kakao.get("latitude") is not None):
+            name = kakao.get("name") or key
+            addr = kakao.get("address") or ""
+
+            # TourAPI로 overview 보강 시도
+            overview_detail = await self._fetch_detail_from_tourapi(name) or {}
+            desc = overview_detail.get("description") or self._one_line(f"{name} · {addr}" if addr else name)
+
+            return PlaceDetailResponse(
+                place_name=name,
+                longitude=float(kakao["longitude"]),
+                latitude=float(kakao["latitude"]),
+                description=desc
+            )
+
+        # 2) TourAPI 보조 (좌표 + overview)
+        tour = await self._fetch_detail_from_tourapi(key)
+        if tour:
+            return PlaceDetailResponse(
+                place_name=tour["name"],
+                longitude=float(tour["longitude"]),
+                latitude=float(tour["latitude"]),
+                description=tour.get("description") or self._one_line(tour["name"])
+            )
+
+        # 3) 모두 실패
+        raise HTTPException(status_code=404, detail="장소를 찾을 수 없습니다.")
