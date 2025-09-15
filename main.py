@@ -13,7 +13,6 @@ from locations.controller.place_bookmark import router as place_bookmark
 from locations.controller.rating import router as rating
 from locations.controller.place import router as place
 from locations.repository import apply_rating_trigger_migration
-from locations.controller.distance import router as locations
 from mypage.controller.mypage import router as mypage
 from board.controller.document import router as document
 from board.controller.like import router as actions
