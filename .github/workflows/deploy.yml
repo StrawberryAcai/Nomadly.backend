@@ -78,6 +78,16 @@ jobs:
           echo "Please set OPENAI_API_KEY in GitHub repository secrets"
           exit 1
         fi
+        if [ -z "${{ secrets.TOURAPI_KEY }}" ]; then
+          echo "❌ ERROR: TOURAPI_KEY secret is not set"
+          echo "Please set TOURAPI_KEY in GitHub repository secrets"
+          exit 1
+        fi
+        if [ -z "${{ secrets.KAKAO_REST_API_KEY }}" ]; then
+          echo "❌ ERROR: KAKAO_REST_API_KEY secret is not set"
+          echo "Please set KAKAO_REST_API_KEY in GitHub repository secrets"
+          exit 1
+        fi
         echo "✅ All required secrets are configured"
 
     - name: 'Create terraform.tfvars'
@@ -117,6 +127,8 @@ jobs:
           --port 8000 \
           --set-env-vars JWT_ALGORITHM=HS256 \
           --set-env-vars OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
+          --set-env-vars TOURAPI_KEY="${{ secrets.TOURAPI_KEY }}" \
+          --set-env-vars KAKAO_REST_API_KEY="${{ secrets.KAKAO_REST_API_KEY }}" \
           --set-secrets DATABASE_URL=database-url:latest \
           --set-secrets JWT_SECRET=jwt-secret:latest \
           --max-instances 5 \

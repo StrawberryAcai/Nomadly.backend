@@ -51,6 +51,23 @@ class PlaceRepository:
             cur.close()
             con.close()
 
+    def get_place_by_address(self, address: str) -> Optional[Dict[str, Any]]:
+        """
+        주소로 장소를 검색합니다. 완전 일치 기준.
+        """
+        sql = """
+        SELECT place_id, name, address, overall_rating, overall_bookmark
+        FROM place WHERE address = %s
+        LIMIT 1;
+        """
+        con, cur = get_connection()
+        try:
+            cur.execute(sql, (address,))
+            return cur.fetchone()
+        finally:
+            cur.close()
+            con.close()
+
     def list_places(self, *, limit: int = 20, offset: int = 0, order_by: str = "overall_bookmark DESC") -> List[Dict[str, Any]]:
         allowed = {
             "name", "name DESC",

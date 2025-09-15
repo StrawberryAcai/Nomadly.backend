@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import Any, Dict, List
 from haversine import haversine
 from tourapi.client import TourAPIClient
+from uuid import uuid4
 
 from locations.repository.place import PlaceRepository
 from locations.constants import CONTENTTYPE
@@ -48,6 +49,7 @@ async def recommend(typeId: int, longitude: float, latitude: float) -> Recommend
     max_distance_m = 10_000
 
     api_key = os.getenv("TOURAPI_KEY")
+    print(api_key)
     if not api_key:
         raise ValueError("TOURAPI_KEY 환경 변수가 설정되지 않았습니다.")
     client = TourAPIClient(api_key)
@@ -98,31 +100,42 @@ async def recommend(typeId: int, longitude: float, latitude: float) -> Recommend
 
         rating = 0.0
         bookmark_cnt = 0
+        address = ""
+        place_id_val = None
         if place_info:
             if isinstance(place_info, dict):
                 rating = _to_float(place_info.get("overall_rating"), 0.0)
                 bookmark_cnt = _to_int(place_info.get("overall_bookmark"), 0)
+                address = place_info.get("address") or ""
+                place_id_val = place_info.get("place_id")
             else:
                 # SELECT place_id, name, address, overall_rating, overall_bookmark
                 try:
                     rating = _to_float(place_info[3], 0.0)
                     bookmark_cnt = _to_int(place_info[4], 0)
+                    address = place_info[2] or ""
+                    place_id_val = place_info[0]
                 except Exception:
                     rating = 0.0
                     bookmark_cnt = 0
+                    address = ""
+                    place_id_val = None
         else:
             rating = 4.9
             bookmark_cnt = 0
+            address = ""
+            place_id_val = str(uuid4())
 
-        # 트렌드 간단 로직
         trend = bookmark_cnt > 100
 
         results.append({
+            "place_id": place_id_val or str(uuid4()),
             "place_name": title,
             "rating": float(rating),
             "trend": bool(trend),
             "bookmark_cnt": int(bookmark_cnt),
             "distance": _distance_int(distance_m),
+            "address": address,
             "image": str(img),
         })
 

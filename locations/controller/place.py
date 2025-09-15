@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Path
+from fastapi import APIRouter, HTTPException, Path, Query
 from locations.model.response.place import PlaceResponse
 from locations.service.place import PlaceService
 
@@ -12,7 +12,8 @@ router = APIRouter(prefix="/api/locations/place", tags=["장소"])
         "주어진 장소 이름으로 장소를 조회합니다.\n"
         "- 존재하면 기존 장소 정보를 반환합니다.\n"
         "- 존재하지 않으면 새 장소를 생성한 뒤 반환합니다.\n"
-        "이름 양끝의 따옴표는 제거되고, 제어문자는 필터링됩니다."
+        "이름 양끝의 따옴표는 제거되고, 제어문자는 필터링됩니다.\n"
+        "origin(longitude, latitude) 쿼리가 제공되면 현재 위치로부터의 거리(m)를 계산해 distance에 포함합니다."
     ),
     response_description="요청한 장소 정보",
     responses={
@@ -22,10 +23,13 @@ router = APIRouter(prefix="/api/locations/place", tags=["장소"])
                 "application/json": {
                     "example": {
                         "place_id": "123e4567-e89b-12d3-a456-426614174000",
-                        "name": "스타벅스 강남점",
+                        "place_name": "스타벅스 강남점",
                         "address": "서울특별시 강남구 테헤란로 00",
-                        "overall_rating": 4.5,
-                        "overall_bookmark": 10,
+                        "rating": 4.5,
+                        "bookmark_cnt": 10,
+                        "trend": False,
+                        "distance": 0,
+                        "image": "https://example.com/image.jpg"
                     }
                 }
             },
@@ -62,7 +66,9 @@ async def get_or_create_place(
         ...,
         description="조회하거나 생성할 장소 이름",
         example="스타벅스 강남점",
-    )
+    ),
+    longitude: float | None = Query(default=None, description="현재 위치 경도"),
+    latitude: float | None = Query(default=None, description="현재 위치 위도"),
 ):
     service = PlaceService()
-    return service.get_or_create_place(place_name)
+    return await service.get_or_create_place(place_name, longitude=longitude, latitude=latitude)
