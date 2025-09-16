@@ -4,11 +4,9 @@ import os, json, re
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from typing import Dict, Any, List
-
 from rag import ToolExecutor, TOOL_SCHEMAS
 from rag.openai_adapter import OpenAIChatTools
 from util.openai_client import openai_async_client
-
 from plan.model.request.plan import PlanRequest as AIPlanRequest
 from plan.model.response.plan import AIPlanResponse
 
