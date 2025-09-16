@@ -67,3 +67,6 @@ terraform/tfplan
 # Logs
 *.log
 logs/
+
+# Tests
+pytest.ini

@@ -16,6 +16,7 @@ from locations.repository import apply_rating_trigger_migration
 from mypage.controller.mypage import router as mypage
 from board.controller.document import router as document
 from board.controller.like import router as actions
+from plan.controller.plan import router as plan_ai_router
 # Initialize JWT configuration on startup (like Spring @Configuration)
 from util.jwt_config import jwt_config
 print(f"🚀 Application starting with JWT configuration...")
@@ -52,6 +53,7 @@ app.include_router(router=place)
 app.include_router(router=mypage)
 app.include_router(router=document)
 app.include_router(router=actions)
+app.include_router(router=plan_ai_router)
 
 if __name__ == '__main__':
     import os
