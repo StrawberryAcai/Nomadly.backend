@@ -1,26 +1,28 @@
 import uuid
 
-from mypage.model.mypage import PlanItemDetailResponse, PlanDetailResponse, MyPlansResponse, MyBookmarkResponse, \
-    MyLikeBoardResponse
+from mypage.model.mypage import PlanDetailResponse, MyBookmarkResponse, \
+    MyLikeBoardResponse, MyPlansResponse
 from mypage.repository import mypage as repository
 
 
 def get_plans(user_id: uuid.UUID):
     rows = repository.get_plans(user_id)
+    print(rows)
 
-    return MyPlansResponse(
-        plan_id = uuid.UUID(rows[0][0]),
-        plan = PlanDetailResponse(
-            start_time = str(rows[0][1]),
-            end_time = str(rows[0][2]),
-            plan = [
-                PlanItemDetailResponse(
-                    todo = row[-3], place = row[-2], time = str(row[-1])
-                )
-                for row in rows
-            ]
-        )
-    )
+    result = []
+    for row in rows:
+        if uuid.UUID(row[0]) not in result:
+            result.append(MyPlansResponse(
+                plan_id=uuid.UUID(row[0]),
+                start_time=str(row[1]),
+                end_time=str(row[2]),
+                plan=[PlanDetailResponse(todo=row[3], place=row[4], time=str(row[5]))]
+            ))
+        elif uuid.UUID(row[0]) in result:
+            temp = result.pop(result.index(uuid.UUID(row[0])))
+            temp["plan"].append(PlanDetailResponse(todo=row[3], place=row[4], time=str(row[5])))
+
+    return result
 
 
 def get_bookmark_place(user_id: uuid.UUID):

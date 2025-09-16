@@ -9,14 +9,13 @@ def get_plans(user_id: uuid.UUID):
         """
         select 
             p.id, p.start_date, p.end_date,
-            p.private, i.todo, i.place, i."time"
+            i.todo, i.place, i."time"
         from plan p join plan_item i
         on p.id = i.plan_id
         where p.author = %s;
         """, (str(user_id),)
     )
     return cur.fetchall()
-
 
 def get_bookmark_place(user_id: uuid.UUID):
     cur.execute(

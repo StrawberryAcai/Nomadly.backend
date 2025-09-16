@@ -3,19 +3,16 @@ from typing import List
 
 from pydantic import BaseModel
 
-class PlanItemDetailResponse(BaseModel):
+class PlanDetailResponse(BaseModel):
     todo: str
     place: str
     time: str
 
-class PlanDetailResponse(BaseModel):
-    start_time: str
-    end_time: str
-    plan: List[PlanItemDetailResponse]
-
 class MyPlansResponse(BaseModel):
     plan_id: uuid.UUID
-    plan: PlanDetailResponse
+    start_time: str
+    end_time: str
+    plan: List[PlanDetailResponse]
 
 class MyBookmarkResponse(BaseModel):
     place_id: uuid.UUID
