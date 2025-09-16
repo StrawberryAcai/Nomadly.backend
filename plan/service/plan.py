@@ -9,6 +9,8 @@ from rag.openai_adapter import OpenAIChatTools
 from util.openai_client import openai_async_client
 from plan.model.request.plan import PlanRequest as AIPlanRequest
 from plan.model.response.plan import AIPlanResponse
+from uuid import UUID
+from plan.repository.plan import PlanRepository
 
 # 시스템 프롬프트: 주소 포함, 모호성 제거, 도구 사용 필수
 SYSTEM_PROMPT = """You are an itinerary planner that MUST use the provided TourAPI tools to gather places.
@@ -41,7 +43,7 @@ def _date_range_days(start: datetime, end: datetime) -> int:
 def _fmt_ok(s: str) -> bool:
     return bool(re.match(r"^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}$", s))
 
-async def generate_ai_plan(req: AIPlanRequest, accept_tz: str | None) -> AIPlanResponse:
+async def generate_ai_plan(req: AIPlanRequest, accept_tz: str | None, owner_user_id: UUID | None = None) -> AIPlanResponse:
     # LLM 클라이언트/어댑터/도구 실행기
     client = openai_async_client()
     adapter = OpenAIChatTools(model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"), client=client)
@@ -155,4 +157,37 @@ async def generate_ai_plan(req: AIPlanRequest, accept_tz: str | None) -> AIPlanR
         "end_date": req.end_date,
         "plan": plan,
     }
+    print(owner_user_id)
+    # 생성 플랜을 DB에 저장(옵션): plan.author = owner_user_id
+    if owner_user_id is not None:
+        repo = PlanRepository()
+        # 날짜 범위 → UTC naive(TIMESTAMP)
+        start_utc_naive = start_dt.astimezone(timezone.utc).replace(tzinfo=None)
+        end_utc_naive = end_dt.astimezone(timezone.utc).replace(tzinfo=None)
+        plan_id = repo.create_plan(
+            start_date=start_utc_naive,
+            end_date=end_utc_naive,
+            private=True,
+            author=owner_user_id,
+        )
+
+        # 아이템 저장: "yyyy-mm-dd-hh-MM"를 클라이언트 타임존 기준으로 UTC naive로 변환
+        items_to_save: List[Dict[str, Any]] = []
+        for day in plan:
+            for item in day:
+                t_str = str(item.get("time", ""))
+                try:
+                    local_naive = datetime.strptime(t_str, "%Y-%m-%d-%H-%M")
+                except Exception:
+                    # 비정상 값이면 시작일 09:00로 대체
+                    local_naive = start_dt.replace(hour=9, minute=0, second=0, microsecond=0).replace(tzinfo=None)
+                local_aware = local_naive.replace(tzinfo=tzinfo)
+                utc_naive = local_aware.astimezone(timezone.utc).replace(tzinfo=None)
+                items_to_save.append({
+                    "todo": str(item.get("todo", "")),
+                    "place": str(item.get("place", "")),
+                    "time": utc_naive,
+                })
+        repo.bulk_insert_items(plan_id=plan_id, items=items_to_save)
+
     return AIPlanResponse.model_validate(out)
