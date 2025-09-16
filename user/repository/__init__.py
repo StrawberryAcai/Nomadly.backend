@@ -4,17 +4,32 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# def get_connection():
+#     database_url = os.getenv('DATABASE_URL')
+#     if database_url:
+#         con = psycopg2.connect(database_url)
+#     else:
+#         con = psycopg2.connect(
+#             host=os.getenv('DB_HOST', 'localhost'),
+#             dbname=os.getenv('DB_NAME', 'nomadly'),
+#             user=os.getenv('DB_USER', 'postgres'),
+#             password=os.getenv('DB_PASSWORD', 'postgres'),
+#             port=int(os.getenv('DB_PORT', '5432'))
+#         )
+#     cur = con.cursor()
+#     return con, cur
+
 def get_connection():
     database_url = os.getenv('DATABASE_URL')
     if database_url:
         con = psycopg2.connect(database_url)
     else:
         con = psycopg2.connect(
-            host=os.getenv('DB_HOST', 'localhost'),
-            dbname=os.getenv('DB_NAME', 'nomadly'),
-            user=os.getenv('DB_USER', 'postgres'),
-            password=os.getenv('DB_PASSWORD', 'postgres'),
-            port=int(os.getenv('DB_PORT', '5432'))
+            host=os.getenv('DB_HOST', 'aws-1-ap-northeast-2.pooler.supabase.com'),
+            dbname=os.getenv('DB_NAME', 'postgres'),
+            user=os.getenv('DB_USER', 'postgres.kgsiyqzruyspbgedwrxp'),
+            password=os.getenv('DB_PASSWORD', 'kstoB7ONpsnqU1qX'),
+            port=int(os.getenv('DB_PORT', '6543'))
         )
     cur = con.cursor()
     return con, cur
