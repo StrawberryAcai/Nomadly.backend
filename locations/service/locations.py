@@ -96,35 +96,48 @@ async def recommend(typeId: int, longitude: float, latitude: float) -> Recommend
         except Exception:
             continue
 
-        place_info = place_repo.get_place_by_name(title)
+        # TourAPI 주소 추출 (addr1 우선, 없으면 addr2)
+        tour_addr = str(item.get("addr1") or item.get("addr2") or "").strip()
 
+        # 주소로 우선 매칭 → 이름으로 보조 매칭 → 없으면 생성
+        place_info = None
+        if tour_addr:
+            place_info = place_repo.get_place_by_address(tour_addr)
+        if not place_info and title:
+            place_info = place_repo.get_place_by_name(title)
+        if not place_info:
+            try:
+                place_info = place_repo.create_place(
+                    place_id=uuid4(),
+                    name=title or "미상",
+                    address=tour_addr or None,
+                )
+            except Exception:
+                place_info = None
+
+        # DB 레코드 기반으로 응답 필드 정리
         rating = 0.0
         bookmark_cnt = 0
-        address = ""
+        address = tour_addr
         place_id_val = None
         if place_info:
             if isinstance(place_info, dict):
                 rating = _to_float(place_info.get("overall_rating"), 0.0)
                 bookmark_cnt = _to_int(place_info.get("overall_bookmark"), 0)
-                address = place_info.get("address") or ""
+                address = place_info.get("address") or tour_addr or ""
                 place_id_val = place_info.get("place_id")
             else:
                 # SELECT place_id, name, address, overall_rating, overall_bookmark
                 try:
                     rating = _to_float(place_info[3], 0.0)
                     bookmark_cnt = _to_int(place_info[4], 0)
-                    address = place_info[2] or ""
+                    address = place_info[2] or tour_addr or ""
                     place_id_val = place_info[0]
                 except Exception:
                     rating = 0.0
                     bookmark_cnt = 0
-                    address = ""
+                    address = tour_addr or ""
                     place_id_val = None
-        else:
-            rating = 4.9
-            bookmark_cnt = 0
-            address = ""
-            place_id_val = str(uuid4())
 
         trend = bookmark_cnt > 100
 
