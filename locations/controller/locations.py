@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Header
 from locations.service.locations import recommend
 from locations.model.request.request import RecommendRequest
 from locations.model.response.response import RecommendResponse
@@ -64,7 +64,8 @@ async def locations(
                 }
             }
         },
-    )
+    ),
+    Authorization: str | None = Header(default=None, alias="Authorization"),
 ):
     # 콘텐츠 유형 검증
     type_id = CONTENTTYPE.get(req.type)
@@ -73,6 +74,6 @@ async def locations(
 
     try:
         # RecommendResponse 객체 반환
-        return await recommend(type_id, req.origin.longitude, req.origin.latitude)
+        return await recommend(type_id, req.origin.longitude, req.origin.latitude, Authorization)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

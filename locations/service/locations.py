@@ -1,11 +1,13 @@
 import os
+import jwt
 from decimal import Decimal
-from typing import Any, Dict, List
-from haversine import haversine
+from typing import Any, Dict, List, Optional
+from haversine import haversine, Unit
 from tourapi.client import TourAPIClient
-from uuid import uuid4
+from uuid import uuid4, UUID
 
 from locations.repository.place import PlaceRepository
+from locations.repository.place_bookmark import BookmarkRepository
 from locations.constants import CONTENTTYPE
 from locations.model.response.response import RecommendResponse
 
@@ -45,16 +47,35 @@ def _to_int(v, default=0) -> int:
 def _distance_int(meters: float) -> int:
     return int(round(_to_float(meters, 0.0)))
 
-async def recommend(typeId: int, longitude: float, latitude: float) -> RecommendResponse:
+def _parse_auth_user(authorization: Optional[str]) -> Optional[UUID]:
+    if not authorization:
+        return None
+    try:
+        token = authorization.split()[1] if authorization.lower().startswith(("bearer ", "jwt ")) else authorization
+        secret = os.environ.get("JWT_SECRET", "")
+        try:
+            payload = jwt.decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
+        except Exception:
+            payload = jwt.decode(token, options={"verify_signature": False, "verify_aud": False, "verify_iss": False})  # type: ignore[arg-type]
+        for k in ("user_id", "id", "sub", "uid", "userId"):
+            raw = payload.get(k)
+            if raw:
+                return UUID(str(raw))
+        return None
+    except Exception:
+        return None
+
+async def recommend(typeId: int, longitude: float, latitude: float, authorization: Optional[str] = None) -> RecommendResponse:
     max_distance_m = 10_000
 
     api_key = os.getenv("TOURAPI_KEY")
-    print(api_key)
     if not api_key:
         raise ValueError("TOURAPI_KEY 환경 변수가 설정되지 않았습니다.")
     client = TourAPIClient(api_key)
 
     place_repo = PlaceRepository()
+    bookmark_repo = BookmarkRepository()
+    current_user_id = _parse_auth_user(authorization)
     type_name = next((k for k, v in CONTENTTYPE.items() if v == typeId), str(typeId))
 
     api_resp: Dict[str, Any] = await client.get_location_based_list(
@@ -75,7 +96,7 @@ async def recommend(typeId: int, longitude: float, latitude: float) -> Recommend
         items = [items] if items else []
 
     origin = (latitude, longitude)
-    results: List[Dict[str, Any]] = []
+    results = []  # type: List[Dict[str, Any]]
 
     for item in items:
         if not item:
@@ -83,23 +104,18 @@ async def recommend(typeId: int, longitude: float, latitude: float) -> Recommend
 
         title = str(item.get("title", "")).strip()
         img = item.get("firstimage")
-        if not img:
-            continue
-
         dest_y = _to_float(item.get("mapy"))
         dest_x = _to_float(item.get("mapx"))
-        if dest_x == 0.0 or dest_y == 0.0:
+        if dest_x == 0.0 or dest_y == 0.0 or not img:
             continue
 
         try:
-            distance_m = haversine(origin, (dest_y, dest_x), unit="m")
+            distance_m = haversine(origin, (dest_y, dest_x), unit=Unit.METERS)
         except Exception:
             continue
 
-        # TourAPI 주소 추출 (addr1 우선, 없으면 addr2)
         tour_addr = str(item.get("addr1") or item.get("addr2") or "").strip()
 
-        # 주소로 우선 매칭 → 이름으로 보조 매칭 → 없으면 생성
         place_info = None
         if tour_addr:
             place_info = place_repo.get_place_by_address(tour_addr)
@@ -115,7 +131,6 @@ async def recommend(typeId: int, longitude: float, latitude: float) -> Recommend
             except Exception:
                 place_info = None
 
-        # DB 레코드 기반으로 응답 필드 정리
         rating = 0.0
         bookmark_cnt = 0
         address = tour_addr
@@ -127,7 +142,6 @@ async def recommend(typeId: int, longitude: float, latitude: float) -> Recommend
                 address = place_info.get("address") or tour_addr or ""
                 place_id_val = place_info.get("place_id")
             else:
-                # SELECT place_id, name, address, overall_rating, overall_bookmark
                 try:
                     rating = _to_float(place_info[3], 0.0)
                     bookmark_cnt = _to_int(place_info[4], 0)
@@ -141,6 +155,14 @@ async def recommend(typeId: int, longitude: float, latitude: float) -> Recommend
 
         trend = bookmark_cnt > 100
 
+        is_bookmarked = False
+        if current_user_id and (place_id_val is not None):
+            try:
+                pid = UUID(str(place_id_val))
+                is_bookmarked = bookmark_repo.has_bookmark(user_id=current_user_id, place_id=pid)
+            except Exception:
+                is_bookmarked = False
+
         results.append({
             "place_id": place_id_val or str(uuid4()),
             "place_name": title,
@@ -150,9 +172,7 @@ async def recommend(typeId: int, longitude: float, latitude: float) -> Recommend
             "distance": _distance_int(distance_m),
             "address": address,
             "image": str(img),
+            "bookmarked": bool(is_bookmarked),
         })
 
-    return RecommendResponse(
-        type=type_name,
-        items=results
-    )
+    return RecommendResponse(type=type_name, items=results)

@@ -11,10 +11,22 @@ class PlaceRepository:
         """
         con, cur = get_connection()
         try:
-            cur.execute(sql, (str(place_id), name, address))
+            norm_name = (name or "").strip()
+            norm_addr = (address or None)
+            if norm_addr is not None:
+                norm_addr = norm_addr.strip() or None
+            cur.execute(sql, (str(place_id), norm_name, norm_addr))
             row = cur.fetchone()
             con.commit()
-            return row
+            if not row:
+                return {"place_id": str(place_id), "name": norm_name, "address": norm_addr, "overall_rating": 0.0, "overall_bookmark": 0}
+            return {
+                "place_id": row[0],
+                "name": row[1],
+                "address": row[2],
+                "overall_rating": row[3],
+                "overall_bookmark": row[4],
+            }
         except Exception:
             con.rollback()
             raise
@@ -30,7 +42,16 @@ class PlaceRepository:
         con, cur = get_connection()
         try:
             cur.execute(sql, (str(place_id),))
-            return cur.fetchone()
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {
+                "place_id": row[0],
+                "name": row[1],
+                "address": row[2],
+                "overall_rating": row[3],
+                "overall_bookmark": row[4],
+            }
         finally:
             cur.close()
             con.close()
@@ -41,12 +62,22 @@ class PlaceRepository:
         """
         sql = """
         SELECT place_id, name, address, overall_rating, overall_bookmark
-        FROM place WHERE name = %s;
+        FROM place WHERE LOWER(TRIM(name)) = LOWER(TRIM(%s))
+        LIMIT 1;
         """
         con, cur = get_connection()
         try:
-            cur.execute(sql, (name,))
-            return cur.fetchone()
+            cur.execute(sql, (name.strip(),))
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {
+                "place_id": row[0],
+                "name": row[1],
+                "address": row[2],
+                "overall_rating": row[3],
+                "overall_bookmark": row[4],
+            }
         finally:
             cur.close()
             con.close()
@@ -57,13 +88,22 @@ class PlaceRepository:
         """
         sql = """
         SELECT place_id, name, address, overall_rating, overall_bookmark
-        FROM place WHERE address = %s
+        FROM place WHERE LOWER(TRIM(address)) = LOWER(TRIM(%s))
         LIMIT 1;
         """
         con, cur = get_connection()
         try:
-            cur.execute(sql, (address,))
-            return cur.fetchone()
+            cur.execute(sql, (address.strip(),))
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {
+                "place_id": row[0],
+                "name": row[1],
+                "address": row[2],
+                "overall_rating": row[3],
+                "overall_bookmark": row[4],
+            }
         finally:
             cur.close()
             con.close()
@@ -84,19 +124,30 @@ class PlaceRepository:
         con, cur = get_connection()
         try:
             cur.execute(sql, (limit, offset))
-            return cur.fetchall()
+            rows = cur.fetchall()
+            return [
+                {
+                    "place_id": r[0],
+                    "name": r[1],
+                    "address": r[2],
+                    "overall_rating": r[3],
+                    "overall_bookmark": r[4],
+                }
+                for r in rows
+            ]
         finally:
             cur.close()
             con.close()
 
     def update_place(self, *, place_id: uuid.UUID, name: Optional[str] = None, address: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        sets, params = [], []
+        sets: List[str] = []
+        params: List[Any] = []
         if name is not None:
             sets.append("name = %s")
-            params.append(name)
+            params.append(name.strip())
         if address is not None:
             sets.append("address = %s")
-            params.append(address)
+            params.append(address.strip())
         if not sets:
             return self.get_place(place_id)
 
@@ -112,7 +163,15 @@ class PlaceRepository:
             cur.execute(sql, tuple(params))
             row = cur.fetchone()
             con.commit()
-            return row
+            if not row:
+                return None
+            return {
+                "place_id": row[0],
+                "name": row[1],
+                "address": row[2],
+                "overall_rating": row[3],
+                "overall_bookmark": row[4],
+            }
         except Exception:
             con.rollback()
             raise
@@ -136,34 +195,35 @@ class PlaceRepository:
             con.close()
 
     def refresh_aggregates(self, place_id: uuid.UUID) -> Dict[str, Any]:
-        """
-        overall_bookmark = place_bookmark 카운트
-        overall_rating   = rating 평균(소수1자리), 없으면 0
-        """
+        """place.overall_bookmark를 실제 북마크 수로 갱신하고 최신 레코드를 반환"""
         sql = """
-        WITH b AS (
-          SELECT COUNT(*)::bigint AS cnt
-          FROM place_bookmark
-          WHERE place_id = %s
-        ),
-        r AS (
-          SELECT COALESCE(ROUND(AVG(score)::numeric, 1), 0)::numeric(2,1) AS avg_score
-          FROM rating
-          WHERE place_id = %s
+        UPDATE place p
+        SET overall_bookmark = (
+            SELECT COUNT(*) FROM place_bookmark b WHERE b.place_id = p.place_id
         )
-        UPDATE place
-        SET overall_bookmark = (SELECT cnt FROM b),
-            overall_rating   = (SELECT avg_score FROM r)
-        WHERE place_id = %s
+        WHERE p.place_id = %s
         RETURNING place_id, name, address, overall_rating, overall_bookmark;
         """
-        pid = str(place_id)
         con, cur = get_connection()
         try:
-            cur.execute(sql, (pid, pid, pid))
+            cur.execute(sql, (str(place_id),))
             row = cur.fetchone()
             con.commit()
-            return row
+            if not row:
+                return self.get_place(place_id) or {
+                    "place_id": str(place_id),
+                    "name": "",
+                    "address": None,
+                    "overall_rating": 0.0,
+                    "overall_bookmark": 0,
+                }
+            return {
+                "place_id": row[0],
+                "name": row[1],
+                "address": row[2],
+                "overall_rating": row[3],
+                "overall_bookmark": row[4],
+            }
         except Exception:
             con.rollback()
             raise

@@ -66,11 +66,12 @@ class BookmarkRepository:
 
     # 새 메서드: 특정 사용자/장소 북마크 존재 여부
     def has_bookmark(self, *, user_id: uuid.UUID, place_id: uuid.UUID) -> bool:
-        sql = "SELECT 1 FROM place_bookmark WHERE user_id = %s AND place_id = %s LIMIT 1;"
+        sql = "SELECT EXISTS (SELECT 1 FROM place_bookmark WHERE user_id = %s AND place_id = %s);"
         con, cur = get_connection()
         try:
             cur.execute(sql, (str(user_id), str(place_id)))
-            return cur.fetchone() is not None
+            row = cur.fetchone()
+            return bool(row and row[0])
         finally:
             cur.close()
             con.close()
