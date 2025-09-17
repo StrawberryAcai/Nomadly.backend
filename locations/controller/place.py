@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import APIRouter, HTTPException, Path, Query, Header
 from locations.model.response.place import PlaceResponse, PlaceDetailResponse
 from locations.service.place import PlaceService
 
@@ -65,9 +65,10 @@ async def get_place_detail(
     q: str = Query(..., description="장소 ID(UUID) 또는 주소/이름"),
     longitude: float | None = Query(default=None, description="현재 위치 경도"),
     latitude: float | None = Query(default=None, description="현재 위치 위도"),
+    Authorization: str | None = Header(default=None),
 ):
     service = PlaceService()
-    return await service.get_place_detail(q, longitude=longitude, latitude=latitude)
+    return await service.get_place_detail(q, longitude=longitude, latitude=latitude, authorization=Authorization)
 
 @router.get(
     "/{place_name}",
@@ -191,6 +192,7 @@ async def get_or_create_place(
     ),
     longitude: float | None = Query(default=None, description="현재 위치 경도"),
     latitude: float | None = Query(default=None, description="현재 위치 위도"),
+    Authorization: str | None = Header(default=None),
 ):
     service = PlaceService()
-    return await service.get_or_create_place(place_name, longitude=longitude, latitude=latitude)
+    return await service.get_or_create_place(place_name, longitude=longitude, latitude=latitude, authorization=Authorization)

@@ -10,9 +10,16 @@ from haversine import haversine  # 거리 계산
 from locations.repository.place import PlaceRepository
 from locations.model.response.place import PlaceResponse, PlaceDetailResponse
 
+# 새로 import: JWT 디코딩과 북마크 조회
+import jwt
+from util.jwt_config import get_jwt_config
+from locations.repository.place_bookmark import BookmarkRepository
+
 class PlaceService:
     def __init__(self) -> None:
         self.repo = PlaceRepository()
+        self.bookmarks = BookmarkRepository()
+        self.jwt_conf = get_jwt_config()
 
     def _normalize_name(self, raw: str) -> str:
         s = unquote(raw or "").strip()
@@ -59,6 +66,16 @@ class PlaceService:
             if len(row) > 7:
                 data["trend"] = row[7]
             return data
+        except Exception:
+            return None
+
+    def _parse_auth_user(self, authorization: Optional[str]) -> Optional[UUID]:
+        if not authorization:
+            return None
+        try:
+            token = authorization.split()[1] if authorization.lower().startswith("bearer ") else authorization
+            payload = jwt.decode(token, self.jwt_conf.secret_key, algorithms=[self.jwt_conf.algorithm])
+            return UUID(payload.get("user_id")) if payload.get("user_id") else None
         except Exception:
             return None
 
@@ -235,7 +252,7 @@ class PlaceService:
         except Exception:
             return 0
 
-    def _to_response_payload(self, place_dict: Dict[str, Any], fallback_name: str, place_id: Optional[str] = None, distance_override: Optional[int] = None) -> Dict[str, Any]:
+    def _to_response_payload(self, place_dict: Dict[str, Any], fallback_name: str, place_id: Optional[str] = None, distance_override: Optional[int] = None, *, bookmarked: bool = False) -> Dict[str, Any]:
         img = place_dict.get("image") or place_dict.get("image_url")
         img = img.strip() if isinstance(img, str) else ""
         address = (place_dict.get("address") or "").strip()
@@ -261,12 +278,15 @@ class PlaceService:
             "distance": distance_int,
             "address": address,
             "image": img,
+            "bookmarked": bool(bookmarked),
         }
 
-    async def get_or_create_place(self, place_name: str, longitude: Optional[float] = None, latitude: Optional[float] = None) -> PlaceResponse:
+    async def get_or_create_place(self, place_name: str, longitude: Optional[float] = None, latitude: Optional[float] = None, *, authorization: Optional[str] = None) -> PlaceResponse:
         norm_name = self._normalize_name(place_name)
         if not norm_name:
             raise HTTPException(status_code=400, detail="유효하지 않은 장소 이름입니다.")
+
+        current_user: Optional[UUID] = self._parse_auth_user(authorization)
 
         # 1) DB 우선 조회 (이름)
         row = self.repo.get_place_by_name(norm_name)
@@ -279,7 +299,14 @@ class PlaceService:
                 dx, dy = kakao.get("longitude"), kakao.get("latitude")
                 if isinstance(dx, (int, float)) and isinstance(dy, (int, float)):
                     distance_override = self._compute_distance_m(longitude, latitude, dx, dy)
-            payload = self._to_response_payload(place_dict, norm_name, distance_override=distance_override)
+            # 북마크 여부
+            bookmarked = False
+            if current_user:
+                try:
+                    bookmarked = self.bookmarks.has_bookmark(user_id=current_user, place_id=UUID(str(place_dict["place_id"])))
+                except Exception:
+                    bookmarked = False
+            payload = self._to_response_payload(place_dict, norm_name, distance_override=distance_override, bookmarked=bookmarked)
             if not payload.get("image"):
                 payload["image"] = await self._fetch_image_from_tourapi(payload["place_name"]) or ""
             return PlaceResponse(**payload)
@@ -301,7 +328,14 @@ class PlaceService:
                     dx, dy = source.get("longitude"), source.get("latitude")
                     if isinstance(dx, (int, float)) and isinstance(dy, (int, float)):
                         distance_override = self._compute_distance_m(longitude, latitude, dx, dy)
-                payload = self._to_response_payload(by_addr_dict, norm_name, distance_override=distance_override)
+                # 북마크 여부
+                bookmarked = False
+                if current_user:
+                    try:
+                        bookmarked = self.bookmarks.has_bookmark(user_id=current_user, place_id=UUID(str(by_addr_dict.get("place_id"))))
+                    except Exception:
+                        bookmarked = False
+                payload = self._to_response_payload(by_addr_dict, norm_name, distance_override=distance_override, bookmarked=bookmarked)
                 if not payload.get("image"):
                     payload["image"] = await self._fetch_image_from_tourapi(payload["place_name"]) or ""
                 return PlaceResponse(**payload)
@@ -324,12 +358,13 @@ class PlaceService:
             if isinstance(dx, (int, float)) and isinstance(dy, (int, float)):
                 distance_override = self._compute_distance_m(longitude, latitude, dx, dy)
 
-        payload = self._to_response_payload(source, norm_name, place_id=str(new_place_id), distance_override=distance_override)
+        # 북마크 여부(새로 생성된 경우는 기본 False)
+        payload = self._to_response_payload(source, norm_name, place_id=str(new_place_id), distance_override=distance_override, bookmarked=False)
         if not payload.get("image"):
             payload["image"] = await self._fetch_image_from_tourapi(payload["place_name"]) or ""
         return PlaceResponse(**payload)
 
-    async def get_place_detail(self, q: str, longitude: Optional[float] = None, latitude: Optional[float] = None) -> PlaceDetailResponse:
+    async def get_place_detail(self, q: str, longitude: Optional[float] = None, latitude: Optional[float] = None, *, authorization: Optional[str] = None) -> PlaceDetailResponse:
         """
         DB 비의존 상세 조회:
         - Kakao Local → 좌표/주소로 한줄 설명 구성, TourAPI overview 있으면 우선 사용
@@ -338,6 +373,8 @@ class PlaceService:
         key = (q or "").strip()
         if not key:
             raise HTTPException(status_code=400, detail="유효하지 않은 입력입니다.")
+
+        current_user: Optional[UUID] = self._parse_auth_user(authorization)
 
         # 1) Kakao Local 우선
         kakao = await self._fetch_from_kakao(key)
@@ -349,21 +386,35 @@ class PlaceService:
             overview_detail = await self._fetch_detail_from_tourapi(name) or {}
             desc = overview_detail.get("description") or self._one_line(f"{name} · {addr}" if addr else name)
 
+            # bookmarked: Kakao 기반은 DB place_id가 없으므로 false. 다만 DB에 존재하는 동일 이름/주소가 있으면 그 기준으로 재평가 가능.
+            bookmarked = False
+            if current_user and addr:
+                try:
+                    by_addr = self.repo.get_place_by_address(addr)
+                    if by_addr:
+                        pid = UUID(str((by_addr or {})["place_id"]))
+                        bookmarked = self.bookmarks.has_bookmark(user_id=current_user, place_id=pid)
+                except Exception:
+                    bookmarked = False
+
             return PlaceDetailResponse(
                 place_name=name,
                 longitude=float(kakao["longitude"]),
                 latitude=float(kakao["latitude"]),
-                description=desc
+                description=desc,
+                bookmarked=bool(bookmarked)
             )
 
         # 2) TourAPI 보조 (좌표 + overview)
         tour = await self._fetch_detail_from_tourapi(key)
         if tour:
+            # TourAPI만으로는 DB 매칭이 어려워 기본 False
             return PlaceDetailResponse(
                 place_name=tour["name"],
                 longitude=float(tour["longitude"]),
                 latitude=float(tour["latitude"]),
-                description=tour.get("description") or self._one_line(tour["name"])
+                description=tour.get("description") or self._one_line(tour["name"]),
+                bookmarked=False
             )
 
         # 3) 모두 실패
