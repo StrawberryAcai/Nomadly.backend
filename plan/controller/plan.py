@@ -35,3 +35,12 @@ async def ai_auto_complete(
     except Exception as e:
         # 사용자에게 너무 내부적인 에러를 드러내지 않도록 메시지는 간결하게
         raise HTTPException(status_code=500, detail=f"failed to generate plan: {e}")
+    
+
+# @router.post("/visibility", response_model=AIPlanResponse)
+# async def ai_plan_visibility(
+#     req: AIPlanRequest,
+#     Accept_Timezone: str | None = Header(default=None, alias="Accept-Timezone"),
+# ):
+
+    

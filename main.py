@@ -1,10 +1,10 @@
 import uvicorn
 from fastapi import FastAPI
+from fastapi.security import HTTPBearer
 from dotenv import load_dotenv
 import os
 load_dotenv()
 from starlette.middleware.cors import CORSMiddleware
-# 라우터 등록
 from user.controller.user import router as user
 from user.controller.interest import router as interest
 from auth.controller.auth import router as auth
@@ -21,7 +21,42 @@ from plan.controller.plan import router as plan_ai_router
 from util.jwt_config import jwt_config
 print(f"🚀 Application starting with JWT configuration...")
 
-app = FastAPI()
+# Swagger UI에서 Authorization 헤더를 테스트할 수 있도록 보안 스키마 설정
+app = FastAPI(
+    title="Nomadly API",
+    description="워케이션 및 여행 계획 API",
+    version="1.0.0",
+    swagger_ui_parameters={
+        "persistAuthorization": True,  # 새로고침 후에도 토큰 유지
+    },
+)
+
+# Bearer 토큰 보안 스키마를 OpenAPI 스펙에 추가
+security = HTTPBearer()
+app.openapi_schema = None  # 스키마 재생성 강제
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    from fastapi.openapi.utils import get_openapi
+    openapi_schema = get_openapi(
+        title="Nomadly API",
+        version="1.0.0",
+        description="워케이션 및 여행 계획 API",
+        routes=app.routes,
+    )
+    openapi_schema["components"]["securitySchemes"] = {
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "JWT 액세스 토큰을 입력하세요 (Bearer 접두사 없이)"
+        }
+    }
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
 
 @app.on_event("startup")
 def _apply_db_triggers():
