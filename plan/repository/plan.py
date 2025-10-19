@@ -63,3 +63,39 @@ class PlanRepository:
         finally:
             cur.close()
             con.close()
+
+    def get_plan_by_id(self, plan_id: UUID) -> Optional[Dict[str, Any]]:
+        """plan_id로 plan 조회"""
+        sql = "SELECT id, start_date, end_date, private, author FROM plan WHERE id = %s;"
+        con, cur = get_connection()
+        try:
+            cur.execute(sql, (str(plan_id),))
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {
+                "id": row[0],
+                "start_date": row[1],
+                "end_date": row[2],
+                "private": row[3],
+                "author": row[4]
+            }
+        finally:
+            cur.close()
+            con.close()
+
+    def update_plan_visibility(self, *, plan_id: UUID, private: bool) -> bool:
+        """plan의 공개 여부(private) 변경"""
+        sql = "UPDATE plan SET private = %s WHERE id = %s;"
+        con, cur = get_connection()
+        try:
+            cur.execute(sql, (bool(private), str(plan_id)))
+            updated = cur.rowcount > 0
+            con.commit()
+            return updated
+        except Exception:
+            con.rollback()
+            raise
+        finally:
+            cur.close()
+            con.close()

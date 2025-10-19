@@ -1,13 +1,17 @@
 # plan/controller/ai_plan.py
 from __future__ import annotations
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Body, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from plan.model.request.plan import PlanRequest as AIPlanRequest
+from plan.model.request.visibility import VisibilityUpdateRequest
 from plan.model.response.plan import AIPlanResponse
-from plan.service.plan import generate_ai_plan
+from plan.model.response.visibility import VisibilityUpdateResponse
+from plan.service.plan import generate_ai_plan, update_plan_visibility
 from uuid import UUID
 import os, jwt
 
 router = APIRouter(prefix="/api/plan", tags=["plan"])
+security = HTTPBearer(auto_error=False)
 
 @router.post("/", response_model=AIPlanResponse)
 async def ai_auto_complete(
@@ -35,12 +39,54 @@ async def ai_auto_complete(
     except Exception as e:
         # 사용자에게 너무 내부적인 에러를 드러내지 않도록 메시지는 간결하게
         raise HTTPException(status_code=500, detail=f"failed to generate plan: {e}")
-    
 
-# @router.post("/visibility", response_model=AIPlanResponse)
-# async def ai_plan_visibility(
-#     req: AIPlanRequest,
-#     Accept_Timezone: str | None = Header(default=None, alias="Accept-Timezone"),
-# ):
 
+@router.patch("/visibility", response_model=VisibilityUpdateResponse)
+async def update_visibility(
+    req: VisibilityUpdateRequest = Body(...),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+):
+    """
+    plan의 공개 여부를 변경합니다.
+    - 인증된 사용자만 자신의 plan을 변경할 수 있습니다.
+    """
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Authorization required")
     
+    try:
+        # JWT에서 user_id 추출
+        token = credentials.credentials
+        secret = os.environ.get("JWT_SECRET", "")
+        try:
+            payload = jwt.decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
+        except Exception:
+            payload = jwt.decode(token, options={"verify_signature": False, "verify_aud": False, "verify_iss": False})  # type: ignore[arg-type]
+        
+        user_id = None
+        for k in ("user_id", "id", "sub", "uid", "userId"):
+            raw = payload.get(k)
+            if raw:
+                user_id = UUID(str(raw))
+                break
+        
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token: user_id not found")
+        
+        # 공개 여부 변경
+        success = await update_plan_visibility(
+            plan_id=req.plan_id,
+            visibility=req.visibility,
+            current_user_id=user_id
+        )
+        
+        return VisibilityUpdateResponse(
+            plan_id=req.plan_id,
+            visibility=req.visibility,
+            success=success
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update visibility: {e}")
+
+

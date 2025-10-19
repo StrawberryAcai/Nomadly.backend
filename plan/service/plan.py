@@ -191,3 +191,32 @@ async def generate_ai_plan(req: AIPlanRequest, accept_tz: str | None, owner_user
         repo.bulk_insert_items(plan_id=plan_id, items=items_to_save)
 
     return AIPlanResponse.model_validate(out)
+
+
+async def update_plan_visibility(plan_id: UUID, visibility: str, current_user_id: UUID) -> bool:
+    """
+    plan의 공개 여부를 변경합니다.
+    - plan_id: 변경할 plan의 id
+    - visibility: "public" 또는 "private"
+    - current_user_id: 현재 로그인한 사용자 id (소유자 확인용)
+    Returns: 성공 여부
+    """
+    from fastapi import HTTPException
+    
+    repo = PlanRepository()
+    
+    # 1) plan 존재 여부 및 소유자 확인
+    plan = repo.get_plan_by_id(plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    
+    # 2) 소유자 검증
+    author = plan.get("author")
+    if author is None or UUID(str(author)) != current_user_id:
+        raise HTTPException(status_code=403, detail="You are not the owner of this plan")
+    
+    # 3) visibility 변환 및 업데이트
+    private = (visibility == "private")
+    success = repo.update_plan_visibility(plan_id=plan_id, private=private)
+    
+    return success

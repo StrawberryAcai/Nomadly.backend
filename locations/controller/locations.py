@@ -1,10 +1,12 @@
-from fastapi import APIRouter, HTTPException, Body, Header
+from fastapi import APIRouter, HTTPException, Body, Header, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from locations.service.locations import recommend
 from locations.model.request.request import RecommendRequest
 from locations.model.response.response import RecommendResponse
 from locations.constants import CONTENTTYPE
 
 router = APIRouter(prefix="/api", tags=["장소 추천"])
+security = HTTPBearer(auto_error=False)
 
 
 @router.post(
@@ -65,7 +67,7 @@ async def locations(
             }
         },
     ),
-    Authorization: str | None = Header(default=None, alias="Authorization"),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ):
     # 콘텐츠 유형 검증
     type_id = CONTENTTYPE.get(req.type)
@@ -73,7 +75,9 @@ async def locations(
         raise HTTPException(status_code=400, detail="유효하지 않은 콘텐츠 유형입니다.")
 
     try:
+        # Authorization 헤더 추출
+        auth_header = f"Bearer {credentials.credentials}" if credentials else None
         # RecommendResponse 객체 반환
-        return await recommend(type_id, req.origin.longitude, req.origin.latitude, Authorization)
+        return await recommend(type_id, req.origin.longitude, req.origin.latitude, auth_header)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
