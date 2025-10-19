@@ -33,7 +33,7 @@ like_table_sql = """
 CREATE TABLE "like" (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL,
-    board_id INT NOT NULL,
+    board_id UUID NOT NULL,
     liked_at TIMESTAMPTZ DEFAULT now(),
     FOREIGN KEY (user_id) REFERENCES "user"(id) ON DELETE CASCADE,
     FOREIGN KEY (board_id) REFERENCES board(id) ON DELETE CASCADE,
