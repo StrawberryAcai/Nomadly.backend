@@ -27,13 +27,15 @@ def get_plans(user_id: uuid.UUID):
 
 def get_bookmark_place(user_id: uuid.UUID):
     rows = repository.get_bookmark_place(user_id)
-    return [
+    return {
+        "plans" : [
                 MyBookmarkResponse(
                     place_id = uuid.UUID(row[0]), name = row[1], address = row[2]
                     , overall_bookmark = row[3], overall_rating = row[4]
                 )
                 for row in rows
-            ]
+        ]
+    }
 
 
 def get_like_boards(user_id: uuid.UUID):
