@@ -22,7 +22,7 @@ def get_plans(user_id: uuid.UUID):
             temp = result.pop(result.index(uuid.UUID(row[0])))
             temp["plan"].append(PlanDetailResponse(todo=row[3], place=row[4], time=str(row[5])))
 
-    return result
+    return {"plans" : result}
 
 
 def get_bookmark_place(user_id: uuid.UUID):
