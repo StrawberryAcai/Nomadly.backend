@@ -1,11 +1,11 @@
 import uuid
-from typing import Optional, List
+from typing import Optional, List, Any
 
 from board.model.document import BoardResponse, BoardDetailResponse
 
 from board.repository import document as repository
 
-def get_all_boards(keyword: Optional[str], user_id: uuid.UUID) -> List[BoardResponse]:
+def get_all_boards(keyword: Optional[str], user_id: uuid.UUID):
     if keyword is None:
         rows = repository.get_all_boards(user_id)
     else:
@@ -21,7 +21,7 @@ def get_all_boards(keyword: Optional[str], user_id: uuid.UUID) -> List[BoardResp
                 likes=row[4]
             )
         )
-    return result
+    return {"plans": result}
 
 def get_board_details(board_id: uuid.UUID, user_id: uuid.UUID) -> BoardDetailResponse:
     board = repository.get_board_details(board_id, user_id)
